@@ -1,0 +1,40 @@
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+
+# SQLite Databases & data storage
+*.db
+*.sqlite
+*.sqlite3
+data/
+*.log
+
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Streamlit secrets & cache
+.streamlit/secrets.toml
+
+# IDE & OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

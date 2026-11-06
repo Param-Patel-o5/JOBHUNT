@@ -1,0 +1,19 @@
+# Core AI & Workflow Orchestration
+langgraph>=0.2.50
+langchain-core>=0.3.15
+langchain-google-genai>=2.0.5
+pydantic>=2.9.0
+
+# Ingestion, Scraping & Search Dorking
+python-jobspy>=1.4.0
+httpx>=0.27.2
+tavily-python>=0.5.0
+duckduckgo-search>=8.1.1
+
+# Configuration & Utilities
+python-dotenv>=1.0.1
+pyyaml>=6.0.2
+
+# Triage UI & Data Storage
+streamlit>=1.40.0
+pandas>=2.2.3

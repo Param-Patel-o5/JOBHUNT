@@ -1,0 +1,55 @@
+candidate:
+  name: "Param Patel"
+  university: "BITS Pilani, Hyderabad Campus"
+  degree: "B.E. Electronics & Instrumentation (Minor: Computation & Intelligence)"
+  graduation_year: 2027
+  portfolio_url: "https://parampatel-ai.vercel.app"
+  target_roles:
+    - "AI Engineer"
+    - "Applied AI Engineer"
+    - "LLM Engineer"
+    - "GenAI Engineer"
+    - "Machine Learning Engineer"
+  min_ctc_lpa: 15
+  preferred_locations:
+    - "Bangalore"
+    - "Hyderabad"
+    - "Pune"
+    - "Gurgaon"
+    - "Noida"
+    - "Mumbai"
+    - "Remote"
+
+# Arsenal of shipped projects for the Artifact-to-JD Hook Mapper
+project_arsenal:
+  - id: "agent_diagnostician"
+    name: "Agent Failure Diagnostician (Published on PyPI)"
+    tags: ["agents", "langgraph", "langchain", "autogen", "evaluation", "observability", "llm-ops", "python"]
+    one_liner: "Published an open-source Python library on PyPI that automatically tracks and debugs why multi-agent AI workflows (LangChain/LangGraph) fail or get stuck in production."
+    best_for_jd_keywords: ["multi-agent", "langgraph", "agentic", "llm evaluation", "observability", "reliability", "guardrails"]
+
+  - id: "tempus_rag"
+    name: "TempusRAG (Temporal Financial RAG Engine)"
+    tags: ["rag", "chromadb", "bm25", "hybrid-search", "rrf", "sec-filings", "retrieval", "NLP"]
+    one_liner: "Built a financial AI search engine over 5 years of SEC 10-K filings combining keyword and vector search so LLMs pull exact figures without hallucinating (87.4% accuracy)."
+    best_for_jd_keywords: ["rag", "retrieval", "vector database", "search", "embeddings", "reranking", "financial ai", "knowledge graph"]
+
+  - id: "lidar_parser"
+    name: "High-Throughput C++/Python LiDAR PCAP Parser (First-Author Paper)"
+    tags: ["c++", "python", "systems", "computer-vision", "3d", "point-cloud", "optimization", "low-latency"]
+    one_liner: "Wrote a high-speed C++ and Python data converter (first-author research paper) that processes 2.08 million 3D sensor points per second on a standard laptop."
+    best_for_jd_keywords: ["c++", "low latency", "inference optimization", "computer vision", "robotics", "systems engineering", "high throughput"]
+
+  - id: "fairtrace"
+    name: "FairTrace by Synchrony — Dual-Lane Regulatory Compliance & Fair ML Architecture"
+    tags: ["fintech", "banking", "risk", "governance", "compliance", "tabular-ml", "fairness", "credit-risk", "xgboost"]
+    one_liner: "Built a credit-risk ML pipeline for financial lending that balances high predictive accuracy (0.741 AUC) with strict regulatory fairness compliance."
+    best_for_jd_keywords: ["fintech", "banking", "risk", "credit", "compliance", "governance", "tabular ml", "xgboost", "fairness", "regulatory"]
+
+hard_filters:
+  max_yoe_required: 2
+  blacklisted_companies:
+    - "Crossover"
+    - "Turing"
+    - "BairesDev"
+    - "Revature"
