@@ -15,6 +15,12 @@ from typing import List, Dict, Any, Optional
 
 from src.models import ContactPerson
 from src.nodes.scrapers import search_dork_engine
+from src.utils.company_matcher import (
+    normalize_company_name,
+    verify_contact_company,
+    parse_linkedin_title,
+    extract_cleaned_headline,
+)
 
 logger = logging.getLogger("referral.people_finder")
 if not logger.handlers:
@@ -66,39 +72,36 @@ def parse_linkedin_search_result(item: Dict[str, str], tier: str, company: str =
     if any(kw in title_lower for kw in ["profiles", "top 10", "top 20", "search results", "directory"]):
         return None
 
-    # Split name and headline (delimiters: " - ", " – ", " — ", " | ")
-    parts = re.split(r"\s+[-–—|]\s+", cleaned_title, maxsplit=1)
-    if len(parts) >= 2:
-        name = parts[0].strip()
-        headline = parts[1].strip()
-    else:
+    # Parse structural LinkedIn title (Name & Headline)
+    name, headline = parse_linkedin_title(cleaned_title)
+    if not name:
         name = cleaned_title
-        headline = raw_content[:120].strip() if raw_content else f"Professional at {company}"
+    if not headline:
+        headline = extract_cleaned_headline(cleaned_title, company)
 
     # Name sanity check: name should not be too long or contain generic phrases
     if len(name.split()) > 6 or len(name) < 2 or "linkedin" in name.lower():
         return None
 
     # -------------------------------------------------------------
-    # Ex-Employee / Former Staff Filter
+    # 3-Stage Deterministic Entity Verification Pipeline Gate
     # -------------------------------------------------------------
-    c_lower = company.lower().strip()
-    c_slug = re.sub(r"[^a-zA-Z0-9]", "", c_lower)
-    combined_check = f"{headline} {raw_content}".lower()
-
-    ex_indicators = [
-        f"ex-{c_lower}", f"ex - {c_lower}", f"ex {c_lower}",
-        f"former {c_lower}", f"previously at {c_lower}", f"past: {c_lower}",
-        f"ex-{c_slug}", f"former {c_slug}", f"previously {c_slug}"
-    ]
-    if any(ind in combined_check for ind in ex_indicators):
-        # Profile mentions ex/former for this target company
-        return None
-
-    # If headline explicitly states they currently work at another company (e.g. "... at Microsoft | Ex-NetApp")
-    if " at " in headline.lower() and c_lower not in headline.lower().split(" at ")[-1]:
-        if "ex-" in headline.lower() or "former" in headline.lower():
+    if company:
+        is_valid, confidence, reason = verify_contact_company(
+            company_name=company,
+            linkedin_title=raw_title,
+            linkedin_snippet=raw_content
+        )
+        if not is_valid or confidence < 0.85:
+            logger.info(
+                f"[People Finder] Strict Gate Rejected candidate '{name}' ({headline}): {reason} "
+                f"(confidence={confidence:.2f}) for company '{company}'"
+            )
             return None
+        logger.info(
+            f"[People Finder] Strict Gate Accepted candidate '{name}' ({headline}): {reason} "
+            f"(confidence={confidence:.2f}) for company '{company}'"
+        )
 
     # -------------------------------------------------------------
     # Personal Journey & Context Extraction
@@ -212,6 +215,9 @@ def find_contacts_for_company(company: str, role: str) -> List[ContactPerson]:
     """
     company_clean = company.strip()
     company_key = company_clean.lower()
+    canonical_name, _ = normalize_company_name(company_clean)
+    search_company = canonical_name.title() if canonical_name.islower() else (canonical_name or company_clean)
+    company_phrases = f'("at {search_company}" OR "@ {search_company}" OR "@{search_company}" OR "{search_company}")'
 
     # Check cache first
     with _CACHE_LOCK:
@@ -232,8 +238,8 @@ def find_contacts_for_company(company: str, role: str) -> List[ContactPerson]:
     # -------------------------------------------------------------
     # Query 1: Tier 1 - BITS Alumni at Company
     # -------------------------------------------------------------
-    q1 = f'site:linkedin.com/in/ "{company_clean}" "BITS Pilani" ("AI" OR "Machine Learning" OR "Software" OR "Engineer")'
-    logger.info(f"[People Finder] Running Tier 1 (BITS Alumni) dork for '{company_clean}'")
+    q1 = f'site:linkedin.com/in/ {company_phrases} "BITS Pilani" ("AI" OR "Machine Learning" OR "Software" OR "Engineer")'
+    logger.info(f"[People Finder] Running Tier 1 (BITS Alumni) dork for '{search_company}' ({company_clean})")
     try:
         r1 = search_dork_engine(q1, max_results=4)
         add_contacts(r1, "1_ALUMNI")
@@ -244,8 +250,8 @@ def find_contacts_for_company(company: str, role: str) -> List[ContactPerson]:
     # Query 2: Tier 2 - Team Peer / Tech Lead (run only if < 2 found)
     # -------------------------------------------------------------
     if len(discovered) < 2:
-        q2 = f'site:linkedin.com/in/ "{company_clean}" ("AI Engineer" OR "Machine Learning" OR "Engineering Manager") ("India" OR "Bengaluru" OR "Hyderabad")'
-        logger.info(f"[People Finder] Running Tier 2 (Team Peer/HM) dork for '{company_clean}'")
+        q2 = f'site:linkedin.com/in/ {company_phrases} ("AI Engineer" OR "Machine Learning" OR "Software Engineer" OR "Engineering Manager" OR "Tech Lead") ("India" OR "Bengaluru" OR "Hyderabad")'
+        logger.info(f"[People Finder] Running Tier 2 (Team Peer/HM) dork for '{search_company}' ({company_clean})")
         try:
             r2 = search_dork_engine(q2, max_results=4)
             add_contacts(r2, "2_TEAM_ENGINEER_OR_HM")
@@ -256,8 +262,8 @@ def find_contacts_for_company(company: str, role: str) -> List[ContactPerson]:
     # Query 3: Tier 3 - Recruiter Fallback (run only if total < 2)
     # -------------------------------------------------------------
     if len(discovered) < 2:
-        q3 = f'site:linkedin.com/in/ "{company_clean}" ("Technical Recruiter" OR "Talent Acquisition") ("India")'
-        logger.info(f"[People Finder] Running Tier 3 (Recruiter) dork for '{company_clean}'")
+        q3 = f'site:linkedin.com/in/ {company_phrases} ("Technical Recruiter" OR "Talent Acquisition" OR "Recruiter") ("India")'
+        logger.info(f"[People Finder] Running Tier 3 (Recruiter) dork for '{search_company}' ({company_clean})")
         try:
             r3 = search_dork_engine(q3, max_results=4)
             add_contacts(r3, "3_RECRUITER")
