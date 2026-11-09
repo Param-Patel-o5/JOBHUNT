@@ -572,11 +572,11 @@ def render_triage_queue():
             if c1.get("linkedin_url"):
                 st.link_button(f"Open LinkedIn Profile ({c1.get('name')})", c1.get("linkedin_url"), width="stretch")
 
-            st.markdown('<div class="step-box-header">STEP 1: Connection Request Note (Mentor/Advice Frame — ≤ 260 chars)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="step-box-header">STEP 1: Connection Request Note (Mentor/Advice Frame — ≤ 190 chars)</div>', unsafe_allow_html=True)
             note1 = d1.get("connection_note_300_chars", f"Hi {c1.get('name', '').split()[0]}, fellow BITSian here. Would love to connect and learn about your work at {job['company']}!")
             st.code(note1, language=None, wrap_lines=True)
 
-            st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Plain English Proof + Low-Hassle Referral Ask — ≤ 95 words)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Plain English Proof + Low-Hassle Referral Ask — ≤ 85 words)</div>', unsafe_allow_html=True)
             dm1 = d1.get("full_dm_under_95_words", f"Hi {c1.get('name', '').split()[0]}, thanks for connecting! I'm applying for {job['role']} at {job['company']}. My work: https://parampatel-ai.vercel.app")
             st.code(dm1, language=None, wrap_lines=True)
         elif fallback_note:
@@ -600,11 +600,11 @@ def render_triage_queue():
             if c2.get("linkedin_url"):
                 st.link_button(f"Open LinkedIn Profile ({c2.get('name')})", c2.get("linkedin_url"), width="stretch")
 
-            st.markdown('<div class="step-box-header">STEP 1: Connection Request Note (Mentor/Advice Frame — ≤ 260 chars)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="step-box-header">STEP 1: Connection Request Note (Mentor/Advice Frame — ≤ 190 chars)</div>', unsafe_allow_html=True)
             note2 = d2.get("connection_note_300_chars", f"Hi {c2.get('name', '').split()[0]}, came across your work at {job['company']}. Would love to connect!")
             st.code(note2, language=None, wrap_lines=True)
 
-            st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Plain English Proof + Low-Hassle Referral Ask — ≤ 95 words)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Plain English Proof + Low-Hassle Referral Ask — ≤ 85 words)</div>', unsafe_allow_html=True)
             dm2 = d2.get("full_dm_under_95_words", f"Hi {c2.get('name', '').split()[0]}, thanks for connecting! Applying for {job['role']} at {job['company']}. My work: https://parampatel-ai.vercel.app")
             st.code(dm2, language=None, wrap_lines=True)
         elif contacts and len(contacts) == 1 and fallback_note:

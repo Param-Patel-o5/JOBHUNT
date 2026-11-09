@@ -48,8 +48,8 @@ class OutreachPackage(BaseModel):
     contact_name: str
     contact_tier: str
     linkedin_url: str
-    connection_note_300_chars: str = Field(description="Strict <=260 char note for LinkedIn 'Add a note' modal (Mentor/Advice frame, zero referral ask)")
-    full_dm_under_95_words: str = Field(description="Full message once connected (<=95 words, plain-English proof, low-hassle referral ask + advice)")
+    connection_note_300_chars: str = Field(description="Strict <=190 char note for LinkedIn free-tier 'Add a note' modal (Mentor/Advice frame, zero referral ask)")
+    full_dm_under_95_words: str = Field(description="Full message once connected (<=85 words, plain-English proof, low-hassle referral ask + advice)")
 
 
 class EnrichedJobRecord(BaseModel):

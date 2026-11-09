@@ -2,11 +2,14 @@
 Milestone 4: Outreach Package Generation Layer.
 
 Drafts hyper-tailored outreach packages for discovered contacts:
-  - Strict <= 280 character LinkedIn connection note ("Add a note").
-  - Strict <= 95 word full direct message / InMail / email.
+  - Strict <= 190 character LinkedIn connection note ("Add a note" free-tier limit buffer).
+  - Seniority-aware tone adjustment (Leadership/Director vs. Peer/Junior).
+  - Hyper-personalized references to contact headline and company domain.
+  - Strict <= 85 word full direct message / InMail / email.
   - Fallback direct ATS apply note if no contacts are discovered.
 """
 
+import re
 import logging
 from typing import List, Tuple, Optional
 
@@ -24,6 +27,20 @@ if not logger.handlers:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 PORTFOLIO_URL = "https://parampatel-ai.vercel.app"
+
+
+def detect_seniority(headline: str) -> str:
+    """
+    Detects seniority tier from contact headline.
+    Returns 'Senior/Leadership' if management or leadership keywords are present, else 'Peer/Junior'.
+    """
+    if not headline:
+        return "Peer/Junior"
+
+    pattern = r"\b(?:manager|director|head|lead|leads|leading|principal|staff|vp|vice president|founder|co-founder|chief|cto|partner|architect)\b"
+    if re.search(pattern, headline, re.IGNORECASE):
+        return "Senior/Leadership"
+    return "Peer/Junior"
 
 
 def _build_fallback_note(
@@ -49,41 +66,53 @@ def _build_outreach_prompt(
     job: JobPosting,
     intel: CompanyIntel,
     match_result: MatchAndTailorResult,
+    seniority: str,
 ) -> str:
-    """Builds the structured LLM prompt for the two-stage human networking workflow."""
+    """Builds the structured LLM prompt tailored to contact seniority and domain context."""
+    first_name = contact.name.split()[0] if contact.name else "there"
+
     return f"""You are drafting a 2-stage human networking package for Param Patel, a 2027 graduate from BITS Pilani applying for {job.role} at {intel.company_name}.
 
 CONTACT CONTEXT:
-- Name: {contact.name}
+- Name: {contact.name} (First Name: {first_name})
 - Headline: {contact.headline}
-- Tier: {contact.tier}
+- Seniority Tier: {seniority}
+- Contact Tier: {contact.tier}
 - Relevance / Journey Note: {contact.relevance_note}
-- LinkedIn: {contact.linkedin_url}
 
-JOB & COMPANY CONTEXT:
+COMPANY & ROLE CONTEXT:
 - Company: {intel.company_name}
+- Company Summary: {intel.summary_2_lines}
 - Role: {job.role}
 - Job URL: {job.job_url}
 - Winning Hook / Alignment Proof: {match_result.winning_hook_sentence}
 - Candidate Portfolio: {PORTFOLIO_URL}
 
-TWO-STAGE HUMAN NETWORKING RULES:
+TONE GUIDELINES BY SENIORITY:
+- If Senior/Leadership (Managers, Directors, Heads, Staff, Leads, VPs):
+  Keep it highly respectful and concise. Acknowledge their leadership or tenure, and frame the connection around seeking brief industry perspective or advice from a veteran. (Do NOT treat them like a college peer).
+- If Peer/Junior (Engineers, SDE-1/2, Analysts):
+  Keep it collaborative, warm, and humble, highlighting shared engineering domains or BITS Pilani alumni connection ("fellow BITSian building in your space").
 
-STAGE 1: connection_note_300_chars (LinkedIn "Add a note" modal):
-- HARD LIMIT: STRICTLY <= 260 characters (including spaces and punctuation).
-- GOAL: Mentor & Advice connection frame.
-- ZERO REFERRAL ASK: Do NOT ask for a referral, do NOT ask for a job, and do NOT cite heavy resume metrics here.
-- PERSONALIZATION: Mention being a fellow BITSian (2027 batch) if tier is 1_ALUMNI (or general junior engineer if recruiter/peer). Reference their specific journey, domain, or team from their headline/relevance_note ({contact.relevance_note}).
-- TONE: Warm, respectful, eager to learn.
-- Example vibe: "Hi {contact.name.split()[0]}, fellow BITSian here (2027 batch). Came across your work while looking into {intel.company_name}'s AI initiatives. Would love to connect and learn a bit about your engineering journey to {intel.company_name}!"
+HYPER-PERSONALIZATION RULE:
+You MUST explicitly reference at least one specific technical team, domain, or detail mentioned in their headline or company context (e.g., if their headline mentions "Agentic AI", "Data Infrastructure", or "Computer Vision", you must mention that exact topic).
 
-STAGE 2: full_dm_under_95_words (Sent AFTER they accept your connection request):
-- HARD LIMIT: STRICTLY <= 95 words.
-- TONE: Warm, humble, polite, plain English (NO robotic jargon like "3-tier post-hoc forensic evaluation").
+STRICT LENGTH ENFORCEMENT:
+
+STAGE 1: connection_note_300_chars (LinkedIn free-tier "Add a note" modal):
+- HARD LIMIT: MUST be STRICTLY UNDER 190 characters (including spaces and punctuation). LinkedIn has a strict 200-char limit for free accounts.
+- ZERO REFERRAL ASK: Do NOT ask for a referral or interview here.
+- FRAME: Advice, following their work, or connecting as an aspiring engineer.
+- Example for Senior/Leadership: "Hi {first_name}, fellow BITSian here. Following your leadership in {intel.company_name}'s AI initiatives—would love to connect and learn from your engineering journey!" (<175 chars)
+- Example for Peer/Junior: "Hi {first_name}, fellow BITSian here (2027 batch). Came across your work in AI at {intel.company_name}—would love to connect and follow your team's updates!" (<165 chars)
+
+STAGE 2: full_dm_under_95_words (Sent AFTER they accept the connection):
+- HARD LIMIT: MUST be STRICTLY UNDER 85 words.
+- TONE: Warm, humble, polite, plain English (NO robotic jargon like "3-tier post-hoc forensic").
 - STRUCTURE:
-  1. Thank them for connecting, and state you are applying for the {job.role} role ({job.job_url}).
-  2. Plain-English Proof: In 1 clear sentence, explain how your relevant project ({match_result.winning_hook_sentence}) aligns with what their team builds.
-  3. Zero-Friction Referral + Advice Close: "If you feel my profile is a fit, I'd be really grateful for a referral—happy to send my resume PDF and Job ID so it takes you zero hassle. Either way, I'd love any advice you have for a junior entering this space! My work: {PORTFOLIO_URL}"
+  1. Thank them for connecting, and state you are applying for {job.role} ({job.job_url}).
+  2. Plain-English Proof: 1 natural sentence connecting your project ({match_result.winning_hook_sentence}) to what their team builds.
+  3. Low-Friction Referral + Advice Close: "If you feel my profile is a fit, I'd be really grateful for a referral—happy to send my resume PDF and Job ID so it takes you zero hassle. Either way, I'd love any advice you have for a junior entering this space! My work: {PORTFOLIO_URL}"
 
 Return a structured OutreachPackage object."""
 
@@ -94,23 +123,33 @@ def _sanitize_outreach_package(
     job: JobPosting,
     match_result: MatchAndTailorResult,
 ) -> OutreachPackage:
-    """Enforces hard character (<= 260 chars) and word count (<= 95 words) limits."""
+    """
+    Enforces hard character (<= 190 chars) and word count (<= 85 words) limits.
+    Implements smart truncation at the last complete sentence or word boundary.
+    """
     pkg.contact_name = contact.name
     pkg.contact_tier = contact.tier
     pkg.linkedin_url = contact.linkedin_url
 
-    # 1. Sanitize connection note (<= 260 chars)
+    # 1. Sanitize connection note (MUST be strictly <= 190 chars)
     note = pkg.connection_note_300_chars.strip()
-    if len(note) > 260:
-        truncated = note[:257]
-        last_space = truncated.rfind(" ")
-        if last_space > 180:
-            note = truncated[:last_space] + "..."
+    if len(note) > 190:
+        sub = note[:190]
+        # Look for last sentence boundary before 190
+        last_punct = max(sub.rfind("."), sub.rfind("!"), sub.rfind("?"))
+        if last_punct > 120:
+            note = sub[:last_punct + 1].strip()
         else:
-            note = truncated + "..."
+            # Cut at last word boundary before 187 chars + "..."
+            sub_words = note[:187]
+            last_space = sub_words.rfind(" ")
+            if last_space > 100:
+                note = sub_words[:last_space].rstrip(" ,.-") + "..."
+            else:
+                note = sub_words.rstrip(" ,.-") + "..."
     pkg.connection_note_300_chars = note
 
-    # 2. Sanitize full DM (<= 95 words)
+    # 2. Sanitize full DM (MUST be strictly <= 85 words)
     dm = pkg.full_dm_under_95_words.strip()
     words = dm.split()
 
@@ -118,10 +157,10 @@ def _sanitize_outreach_package(
         dm += f" My work: {PORTFOLIO_URL}"
         words = dm.split()
 
-    if len(words) > 95:
-        dm = " ".join(words[:94]) + "."
+    if len(words) > 85:
+        dm = " ".join(words[:84]) + "."
         if PORTFOLIO_URL not in dm:
-            words_adj = dm.split()[:93]
+            words_adj = dm.split()[:83]
             dm = " ".join(words_adj) + f" {PORTFOLIO_URL}"
 
     pkg.full_dm_under_95_words = dm
@@ -136,7 +175,7 @@ def generate_outreach_for_job(
 ) -> Tuple[List[OutreachPackage], Optional[str]]:
     """
     Generates tailored outreach packages for each contact, or a fallback direct-apply
-    note if no contacts were discovered.
+    note if no contacts were discovered. Adjusts tone based on detected seniority.
 
     Args:
         job: The target JobPosting.
@@ -155,25 +194,40 @@ def generate_outreach_for_job(
     outreach_packages: List[OutreachPackage] = []
 
     for contact in contacts:
-        prompt = _build_outreach_prompt(contact, job, company_intel, match_result)
+        seniority = detect_seniority(contact.headline)
+        prompt = _build_outreach_prompt(contact, job, company_intel, match_result, seniority)
+        first_name = contact.name.split()[0] if contact.name else "there"
+
         try:
-            logger.info(f"[Drafter] Generating outreach for {contact.name} ({contact.tier}) at {job.company}")
+            logger.info(f"[Drafter] Generating outreach for {contact.name} ({seniority} | {contact.tier}) at {job.company}")
             raw_pkg = invoke_structured_llm(OutreachPackage, prompt, tier="smart")
             sanitized_pkg = _sanitize_outreach_package(raw_pkg, contact, job, match_result)
             outreach_packages.append(sanitized_pkg)
         except Exception as e:
             logger.error(f"[Drafter] Failed to draft outreach for {contact.name}: {e}")
-            # Robust fallback draft if LLM call fails
-            fallback_note = (
-                f"Hi {contact.name}, I'm Param from BITS Pilani. {match_result.winning_hook_sentence}"
-            )[:270]
+            # Robust seniority-aware fallback draft under 190 characters
+            if seniority == "Senior/Leadership":
+                fallback_note = (
+                    f"Hi {first_name}, fellow BITSian here. Following your leadership in engineering at "
+                    f"{job.company}—would value your guidance as an aspiring AI engineer!"
+                )[:189]
+            else:
+                fallback_note = (
+                    f"Hi {first_name}, fellow BITSian here (2027 batch). Came across your work at "
+                    f"{job.company}—would love to connect and follow your team's engineering updates!"
+                )[:189]
+
             fallback_dm = (
-                f"Hi {contact.name},\n\n"
-                f"I am Param Patel, a 2027 graduate from BITS Pilani applying for the {job.role} role at {job.company} ({job.job_url}).\n\n"
-                f"{match_result.winning_hook_sentence}\n\n"
-                f"You can review my projects and benchmarks at {PORTFOLIO_URL}. "
-                f"If you're open to referring, I'd be grateful—happy to share my resume directly."
+                f"Hi {first_name}, thank you for connecting! I am applying for the {job.role} position at {job.company} ({job.job_url}). "
+                f"{match_result.winning_hook_sentence} "
+                f"If you feel my profile is a fit, I'd be really grateful for a referral—happy to send my resume PDF and Job ID so it takes zero hassle. "
+                f"Either way, I'd love any advice for a junior entering this space! My work: {PORTFOLIO_URL}"
             )
+            # Ensure DM is under 85 words
+            dm_words = fallback_dm.split()
+            if len(dm_words) > 85:
+                fallback_dm = " ".join(dm_words[:84]) + f" {PORTFOLIO_URL}"
+
             outreach_packages.append(
                 OutreachPackage(
                     contact_name=contact.name,
@@ -185,4 +239,3 @@ def generate_outreach_for_job(
             )
 
     return outreach_packages, None
-
