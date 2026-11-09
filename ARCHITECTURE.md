@@ -165,3 +165,4 @@ Most cold outreach tools generate aggressive, immediate referral pitches that fa
 - **Friction Reducer:** Explicitly offers to send Resume PDF and Job ID so the referral requires zero effort from the referrer.
 - *Example:*
   > *"Hi Sonali, thank you for connecting! I am applying for the AI Engineer position at NetApp. I published an open-source PyPI tool that automatically tracks and debugs why multi-agent LangGraph workflows fail, directly matching NetApp's agent reliability requirements. If you feel my profile is a fit, I'd be really grateful for a referral—happy to send my resume PDF and Job ID so it takes zero hassle. Either way, I'd love any advice you have for a junior entering this space! My work: https://parampatel-ai.vercel.app"*
+

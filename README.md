@@ -220,3 +220,4 @@ JOBHUNT/
 ## 📄 License
 
 MIT License. Feel free to fork, adapt, and run your own autonomous job hunt pipeline!
+
