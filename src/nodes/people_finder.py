@@ -21,6 +21,7 @@ from src.utils.company_matcher import (
     parse_linkedin_title,
     extract_cleaned_headline,
 )
+from src.utils.bits_alumni_verifier import verify_bits_alumni
 
 logger = logging.getLogger("referral.people_finder")
 if not logger.handlers:
@@ -104,17 +105,35 @@ def parse_linkedin_search_result(item: Dict[str, str], tier: str, company: str =
         )
 
     # -------------------------------------------------------------
+    # BITS Pilani Genuine Alumni Verification Gate (Tier 1 only)
+    # Rejects certification holders, WILP students, and people who
+    # only mention BITS Pilani as a certification body — not campus graduates.
+    # -------------------------------------------------------------
+    if tier == "1_ALUMNI":
+        is_genuine_alum, alum_reason = verify_bits_alumni(raw_title, raw_content)
+        if not is_genuine_alum:
+            logger.info(
+                f"[People Finder] BITS Alumni Gate Rejected '{name}' ({headline}): {alum_reason}"
+            )
+            return None
+        logger.info(
+            f"[People Finder] BITS Alumni Gate Accepted '{name}' ({headline}): {alum_reason}"
+        )
+
+    # -------------------------------------------------------------
     # Personal Journey & Context Extraction
+    # Campus detection: 3 real campuses are Pilani, Goa, Hyderabad (BPHC)
     # -------------------------------------------------------------
     journey_details = []
     content_lower = raw_content.lower()
     headline_lower = headline.lower()
 
-    if "pilani" in content_lower or "pilani" in headline_lower:
+    # Detect which campus — look for explicit campus city mentions
+    if re.search(r"\bpilani\b(?!\s*(?:campus\s*)?wilp|\s*cert|\s*executive)", content_lower + " " + headline_lower):
         journey_details.append("Pilani campus")
-    elif "goa" in content_lower or "goa" in headline_lower:
+    elif re.search(r"\bgoa\s+campus\b|\bbits\s+goa\b", content_lower + " " + headline_lower):
         journey_details.append("Goa campus")
-    elif "hyderabad" in content_lower or "hyderabad" in headline_lower:
+    elif re.search(r"\bhyderabad\s+campus\b|\bbphc\b|\bbits\s+hyderabad\b", content_lower + " " + headline_lower):
         journey_details.append("Hyderabad campus")
 
     year_match = re.search(r"\b(201\d|202[0-6])\b", raw_content)
@@ -237,8 +256,19 @@ def find_contacts_for_company(company: str, role: str) -> List[ContactPerson]:
 
     # -------------------------------------------------------------
     # Query 1: Tier 1 - BITS Alumni at Company
+    # Enforce phrasing that surfaces EDUCATION section mentions, not certifications.
+    # Key insight:
+    #   - LinkedIn SERP snippet for real alumni: "Education: BITS Pilani"
+    #   - Or their headline contains the degree: "M.Tech AI/ML @ BITS Pilani"
+    #   - Certification holders write: "Databricks Certified | BITS Pilani"
+    # We use multiple phrasings to catch all 3 real campuses without catching WILP.
     # -------------------------------------------------------------
-    q1 = f'site:linkedin.com/in/ {company_phrases} "BITS Pilani" ("AI" OR "Machine Learning" OR "Software" OR "Engineer")'
+    q1 = (
+        f'site:linkedin.com/in/ {company_phrases} '
+        f'("BITS Pilani" OR "BITS, Pilani" OR "Birla Institute of Technology" OR "BPHC") '
+        f'-"WILP" -"certificate program" -"executive certificate" '
+        f'("B.E" OR "M.Tech" OR "M.E" OR "M.Sc" OR "Engineer" OR "AI" OR "Machine Learning")'
+    )
     logger.info(f"[People Finder] Running Tier 1 (BITS Alumni) dork for '{search_company}' ({company_clean})")
     try:
         r1 = search_dork_engine(q1, max_results=4)
