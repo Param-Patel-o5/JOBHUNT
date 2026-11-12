@@ -80,8 +80,29 @@ def parse_linkedin_search_result(item: Dict[str, str], tier: str, company: str =
     if not headline:
         headline = extract_cleaned_headline(cleaned_title, company)
 
-    # Name sanity check: name should not be too long or contain generic phrases
-    if len(name.split()) > 6 or len(name) < 2 or "linkedin" in name.lower():
+    # Name sanity check: name should not be too long or contain generic/corporate phrases
+    name_lower = name.lower().strip()
+    if len(name.split()) > 6 or len(name) < 2 or "linkedin" in name_lower:
+        return None
+
+    # Reject corporate/brand/non-person profiles (e.g., "Kotak Mahindra Bank", "Bits Pilani Wilp")
+    corporate_tokens = (
+        "bank", "ltd", "pvt", "inc", "llc", "corp", "technologies",
+        "solutions", "careers", "jobs", "hiring", "official", "wilp", "pilani"
+    )
+    if any(re.search(rf"\b{tok}\b", name_lower) for tok in corporate_tokens):
+        logger.info(f"[People Finder] Rejected non-person profile name '{name}'")
+        return None
+
+    if company:
+        canonical_comp, _ = normalize_company_name(company)
+        if canonical_comp and (canonical_comp in name_lower or name_lower in company.lower()):
+            logger.info(f"[People Finder] Rejected company-named profile '{name}' for '{company}'")
+            return None
+
+    # If the title had no role/headline separator at all (name == headline), it's usually a brand/stub page
+    if name_lower == headline.lower().strip():
+        logger.info(f"[People Finder] Rejected stub profile without headline '{name}'")
         return None
 
     # -------------------------------------------------------------
