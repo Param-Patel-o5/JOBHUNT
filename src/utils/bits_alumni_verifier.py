@@ -30,7 +30,8 @@ BITS_DEGREE_PATTERNS = re.compile(
     r"""
     (?:
         # Degree mentioned with BITS or Pilani (education block)
-        \b(?:b\.?e\.?|b\.?tech\.?|m\.?e\.?|m\.?tech\.?|m\.?sc\.?|mba|ph\.?d\.?|integrated)\b
+        # Note: B.E., M.Sc. (Dual Degree), M.E., Ph.D. are true campus degrees.
+        \b(?:b\.?e\.?|b\.?tech\.?|m\.?e\.?|m\.?sc\.?|ph\.?d\.?|dual\s+degree|integrated)\b
         .{0,60}?
         \b(?:bits|pilani|b-p-h-c|bphc)\b
     |
@@ -40,18 +41,19 @@ BITS_DEGREE_PATTERNS = re.compile(
         \b(?:pilani\s+campus|goa\s+campus|hyderabad\s+campus|k\s*k\s*birla|dubai\b)\b
     |
         # "Education: BITS Pilani" or "BITS Pilani · 20XX" (snippet Education block)
-        \beducation\s*[:·\-]?\s*(?:bits\s+pilani|birla\s+institute)
+        \beducation\s*[:·\-]?\s*(?:bits\s+pilani|birla\s+institute\s+of\s+technology\s+(?:and|&)\s*science)
     |
         # "BITS Pilani, Class of XXXX" or "Batch of XXXX at BITS"
         \b(?:bits\s+pilani|bitspilani)\b.{0,25}\b(?:class\s+of|batch\s+of|19\d\d|20[01]\d|202[0-9])\b
     |
-        # Headline format: "M.Tech (AI/ML) @ BITS Pilani" — still a campus student
-        \bm\.?\s*tech\b.{0,30}\b(?:bits|pilani)\b
+        # Headline format: M.E. @ BITS Pilani or explicit campus mention
+        \bm\.?\s*e\b.{0,30}\b(?:bits|pilani)\b
     |
         # BITS Pilani campus city alone can confirm (cities unique enough)
         \bbits\s+pilani\b.{0,10}(?:,\s*)?(?:pilani|goa|hyderabad|rajasthan)\b
     |
-        \bbirla\s+institute\s+of\s+technology\b
+        # Full legal name MUST include 'and science' to avoid BIT Mesra (Birla Institute of Technology)
+        \bbirla\s+institute\s+of\s+technology\s+(?:and|&)\s*science\b
     )
     """,
     re.IGNORECASE | re.VERBOSE
@@ -69,6 +71,10 @@ BITS_CERT_PATTERNS = re.compile(
         # Explicit non-degree programme names
         \bbits?\s+pilani\s+wilp\b                               # WILP programme
     |   \bwork\s+integrated\s+learning\b                        # WILP description
+    |   # M.Tech in Software Engineering / Data Science is the corporate WILP off-campus degree
+        \bm\.?\s*tech\b.{0,50}(?:software\s+engineering|data\s+science|wilp)\b
+    |   # M.Tech from BITS Pilani without explicit campus city mention is corporate WILP
+        \bm\.?\s*tech\b.{0,40}\bbits\s+pilani\b(?!\s*(?:pilani|goa|hyderabad)\s+campus)
     |   \bbits?\s+pilani\s+(?:executive|certificate|certified|certification|csis)\b
     |   \bexecutive\s+(?:certificate|education|program|programme)\b.{0,40}\bbits\b
     |   \bcertificate\s+(?:program|programme|course)\b.{0,40}\bbits\b
@@ -126,9 +132,10 @@ def verify_bits_alumni(
     # Normalize all BITS campus aliases so downstream patterns unify around "BITS Pilani".
     # "BITS Goa", "BITS Hyderabad", "BPHC", "Birla Institute of Technology and Science"
     # are all genuine campus references. We handle them via an early-exit positive check.
+    # Note: MUST require 'and science' or '& science' to avoid BIT Mesra (Birla Institute of Technology).
     _campus_alias_re = re.compile(
         r"\b(?:bits\s+goa|bits\s+hyderabad|bphc|bits\s+dubai|"
-        r"birla\s+institute\s+of\s+technology(?:\s+and\s+science|\s*&\s*science)?)\b",
+        r"birla\s+institute\s+of\s+technology\s+(?:and|&)\s*science)\b",
         re.IGNORECASE
     )
     has_campus_alias = bool(_campus_alias_re.search(combined_raw))
@@ -147,9 +154,13 @@ def verify_bits_alumni(
                 return True, f"Verified: Genuine BITS campus alias '{alias_match.group(0)}' found (no cert context)"
 
     # ------------------------------------------------------------------
-    # STEP 1: Hard reject on certification / non-degree programme signals
+    # STEP 1: Hard reject on certification / non-degree programme signals or other institutes
     # (Run on the original combined_raw — NOT alias-expanded to avoid false positives)
     # ------------------------------------------------------------------
+    # Reject BIT Mesra / BIT Sindri / other institutes with 'Birla' or 'BIT'
+    if re.search(r"\b(?:mesra|deoghar|bit\s+mesra|bit\s+sindri)\b", combined_raw, re.IGNORECASE):
+        return False, "Rejected: BIT Mesra/Sindri reference (not BITS Pilani)"
+
     if BITS_CERT_PATTERNS.search(combined_raw):
         return False, "Rejected: BITS Pilani certification/WILP reference (not a campus degree)"
 
@@ -172,7 +183,7 @@ def verify_bits_alumni(
     # This is the Education section — a strong campus degree signal.
     # ------------------------------------------------------------------
     edu_block_pat = re.compile(
-        r"education\s*[:·\-]?\s*(?:bits\s+pilani|birla\s+institute|b\.?i\.?t\.?s\.?)",
+        r"education\s*[:·\-]?\s*(?:bits\s+pilani|birla\s+institute\s+of\s+technology\s+(?:and|&)\s*science|b\.?p\.?h\.?c\.?|bits\s+(?:goa|hyderabad))",
         re.IGNORECASE
     )
     if edu_block_pat.search(combined_raw):

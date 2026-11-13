@@ -185,10 +185,25 @@ def parse_linkedin_title(raw_title: str) -> Tuple[str, str]:
     return name, headline_segment
 
 
-def extract_cleaned_headline(linkedin_title: str, company_name: str = "") -> str:
-    """Extracts the cleanest human-readable headline from a raw LinkedIn title."""
+def extract_cleaned_headline(linkedin_title: str, company_name: str = "", snippet: str = "") -> str:
+    """Extracts the cleanest human-readable headline from a raw LinkedIn title and snippet."""
     _, headline = parse_linkedin_title(linkedin_title)
-    return headline if headline else (f"Professional at {company_name}" if company_name else "Professional")
+    norm_comp, _ = normalize_company_name(company_name) if company_name else ("", [])
+    
+    # If headline is missing or is literally just the company name itself
+    if not headline or (company_name and headline.strip().lower() in (company_name.strip().lower(), norm_comp)):
+        if snippet:
+            role_match = re.search(
+                r"\b((?:AI|ML|Machine Learning|Deep Learning|Software|Data|Platform|Research|Cloud|Full Stack|Backend|Systems)"
+                r"\s+(?:Engineer|Scientist|Developer|Architect|Lead|Manager|Specialist|Associate))\b",
+                snippet,
+                re.IGNORECASE
+            )
+            if role_match:
+                return f"{role_match.group(1)} at {company_name}" if company_name else role_match.group(1)
+        return f"Engineering Team at {company_name}" if company_name else "Professional"
+
+    return headline
 
 
 def verify_contact_company(

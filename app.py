@@ -646,6 +646,60 @@ def render_triage_queue():
     st.markdown('</div>', unsafe_allow_html=True)  # Close flashcard
 
 
+def export_rich_tracker_csv(df: pd.DataFrame) -> str:
+    """
+    Exports a clean, unpacked Excel-friendly CSV with full contact and outreach details.
+    Preserves all Step 1 notes, Step 2 DMs, LinkedIn URLs, and application metadata.
+    """
+    if df.empty:
+        return ""
+
+    rows_data = []
+    for _, row in df.iterrows():
+        contacts = parse_json_safely(row.get("contacts_json")) or []
+        drafts = parse_json_safely(row.get("outreach_drafts_json")) or []
+
+        c1 = contacts[0] if len(contacts) > 0 else {}
+        d1 = drafts[0] if len(drafts) > 0 else {}
+        c2 = contacts[1] if len(contacts) > 1 else {}
+        d2 = drafts[1] if len(drafts) > 1 else {}
+
+        sent_at = str(row.get("outreach_sent_at", ""))
+        sent_clean = sent_at[:16] if sent_at and sent_at not in ("None", "nan") else ""
+
+        created_at = str(row.get("created_at", ""))
+        created_clean = created_at[:10] if created_at and created_at not in ("None", "nan") else ""
+
+        rows_data.append({
+            "Company": row.get("company", ""),
+            "Role": row.get("role", ""),
+            "Status": row.get("status", ""),
+            "Job URL": row.get("job_url", ""),
+            "Surfaced Date": created_clean,
+            "Connection Sent Date": sent_clean,
+            "Est CTC LPA": row.get("est_ctc_lpa", ""),
+            "HR Email": row.get("hr_email", ""),
+            "Contact 1 Name": c1.get("name", ""),
+            "Contact 1 Tier": c1.get("tier", ""),
+            "Contact 1 Headline": c1.get("headline", ""),
+            "Contact 1 LinkedIn": c1.get("linkedin_url", ""),
+            "Contact 1 Step 1 Note": d1.get("connection_note_300_chars", ""),
+            "Contact 1 Step 2 DM": d1.get("full_dm_under_95_words", ""),
+            "Contact 2 Name": c2.get("name", ""),
+            "Contact 2 Tier": c2.get("tier", ""),
+            "Contact 2 Headline": c2.get("headline", ""),
+            "Contact 2 LinkedIn": c2.get("linkedin_url", ""),
+            "Contact 2 Step 1 Note": d2.get("connection_note_300_chars", ""),
+            "Contact 2 Step 2 DM": d2.get("full_dm_under_95_words", ""),
+            "Direct Cover Note": row.get("fallback_note", ""),
+            "Winning Hook": row.get("winning_hook", ""),
+            "Notes": row.get("notes", ""),
+        })
+
+    rich_df = pd.DataFrame(rows_data)
+    return rich_df.to_csv(index=False)
+
+
 # -----------------------------------------------------------------------------
 # View 2: Application Tracker (Exact 8-Column Excel Spreadsheet Replacement)
 # -----------------------------------------------------------------------------
@@ -674,10 +728,11 @@ def render_application_tracker():
         st.info(f"No applications found for stage '{selected_filter}'.")
         return
 
-    # Exact 8 columns in requested order: Company, Role, Est. CTC, HR Email, Referrer, Stage, Sent Date, Notes
+    # Columns in requested order: Company, Role, Job URL, Est. CTC, HR Email, Referrer, Stage, Sent Date, Notes
     columns_in_order = [
         "company",
         "role",
+        "job_url",
         "est_ctc_lpa",
         "hr_email",
         "referrer_name",
@@ -699,6 +754,7 @@ def render_application_tracker():
         "job_id": None,  # Hidden from view
         "company": st.column_config.TextColumn("Company", disabled=True, width="medium"),
         "role": st.column_config.TextColumn("Role", disabled=True, width="medium"),
+        "job_url": st.column_config.LinkColumn("Job Posting", display_text="Open Job", width="small"),
         "est_ctc_lpa": st.column_config.NumberColumn("Est. CTC", format="%.1f LPA", disabled=True, width="small"),
         "hr_email": st.column_config.TextColumn("HR Email", width="medium"),
         "referrer_name": st.column_config.TextColumn("Referrer", width="medium"),
@@ -710,7 +766,7 @@ def render_application_tracker():
     edited_df = st.data_editor(
         edit_df,
         column_config=col_config,
-        disabled=["company", "role", "est_ctc_lpa", "outreach_sent_at"],
+        disabled=["company", "role", "job_url", "est_ctc_lpa", "outreach_sent_at"],
         hide_index=True,
         width="stretch",
         key="tracker_data_editor_8col",
@@ -726,7 +782,7 @@ def render_application_tracker():
             st.rerun()
 
     with c2:
-        csv_data = df.to_csv(index=False)
+        csv_data = export_rich_tracker_csv(df)
         st.download_button(
             "Export Tracker to CSV",
             data=csv_data,
@@ -734,6 +790,139 @@ def render_application_tracker():
             mime="text/csv",
             width="stretch",
         )
+
+    # -------------------------------------------------------------------------
+    # Active Networking & Referral Follow-Up Inspector
+    # -------------------------------------------------------------------------
+    st.markdown("<hr style='border: none; border-top: 1px solid #E2E8F0; margin: 2rem 0 1.25rem 0;'>", unsafe_allow_html=True)
+    st.markdown("### Active Networking & Connection Follow-up")
+    st.markdown(
+        "<p style='color: #64748B; font-size: 0.88rem; margin-top: -0.25rem;'>"
+        "Once a connection request is accepted on LinkedIn, retrieve your ready-to-send Step 2 Post-Connection DM below and mark the referral as asked."
+        "</p>",
+        unsafe_allow_html=True,
+    )
+
+    # Allow picking from roles in CONNECT_SENT or ASKED_REFERRAL, with fallback to all roles in view
+    active_networking = df[df["status"].isin(["CONNECT_SENT", "ASKED_REFERRAL"])]
+    if active_networking.empty:
+        active_networking = df
+
+    options_map = {
+        f"{r['company']} — {r['role']} [{r['status']}]": r
+        for _, r in active_networking.iterrows()
+    }
+
+    if not options_map:
+        return
+
+    sel_label = st.selectbox(
+        "Select Application to View Outreach Details & Step 2 DM:",
+        options=list(options_map.keys()),
+        key="tracker_networking_selector",
+    )
+    sel_job = options_map[sel_label]
+
+    # Render Active Job Card
+    st.markdown('<div class="flashcard" style="margin-top: 1rem;">', unsafe_allow_html=True)
+    top_c1, top_c2 = st.columns([3.5, 1.5])
+    with top_c1:
+        st.markdown(
+            f"""
+            <div class="role-title" style="font-size: 1.2rem;">
+                {sel_job['role']} <span style="font-weight: 400; color: #71717A;">at</span> <span class="company-name">{sel_job['company']}</span>
+            </div>
+            <div class="role-subtitle">
+                Stage: <b>{sel_job['status']}</b> &nbsp;·&nbsp; Sent At: {str(sel_job.get('outreach_sent_at', '—'))[:16]}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with top_c2:
+        if sel_job.get("job_url"):
+            st.link_button("View Job Posting", sel_job["job_url"], width="stretch")
+
+    contacts = parse_json_safely(sel_job.get("contacts_json"))
+    drafts = parse_json_safely(sel_job.get("outreach_drafts_json"))
+    fallback_note = sel_job.get("fallback_note")
+
+    col_c1, col_c2 = st.columns(2)
+
+    # Contact 1
+    with col_c1:
+        if contacts and len(contacts) > 0:
+            c1 = contacts[0]
+            d1 = drafts[0] if drafts and len(drafts) > 0 else {}
+            tier_badge = format_contact_tier(c1.get("tier", ""))
+            st.markdown(
+                f"""
+                <div class="contact-title">Contact 1: {c1.get('name', 'Team Member')}</div>
+                <div class="contact-meta">{tier_badge} &nbsp;·&nbsp; {c1.get('headline', '')}</div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if c1.get("linkedin_url"):
+                st.link_button(f"Open LinkedIn Profile ({c1.get('name')})", c1.get("linkedin_url"), width="stretch")
+
+            st.caption("STEP 1: Connection Request Note (Sent)")
+            note1 = d1.get("connection_note_300_chars", "")
+            st.code(note1, language=None, wrap_lines=True)
+
+            st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Send after connection accepted)</div>', unsafe_allow_html=True)
+            dm1 = d1.get("full_dm_under_95_words", "")
+            st.code(dm1, language=None, wrap_lines=True)
+        elif fallback_note:
+            st.markdown('<div class="contact-title">Direct Application Cover Note</div>', unsafe_allow_html=True)
+            st.code(fallback_note, language=None, wrap_lines=True)
+
+    # Contact 2
+    with col_c2:
+        if contacts and len(contacts) > 1:
+            c2 = contacts[1]
+            d2 = drafts[1] if drafts and len(drafts) > 1 else {}
+            tier_badge = format_contact_tier(c2.get("tier", ""))
+            st.markdown(
+                f"""
+                <div class="contact-title">Contact 2: {c2.get('name', 'Team Member')}</div>
+                <div class="contact-meta">{tier_badge} &nbsp;·&nbsp; {c2.get('headline', '')}</div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if c2.get("linkedin_url"):
+                st.link_button(f"Open LinkedIn Profile ({c2.get('name')})", c2.get("linkedin_url"), width="stretch")
+
+            st.caption("STEP 1: Connection Request Note (Sent)")
+            note2 = d2.get("connection_note_300_chars", "")
+            st.code(note2, language=None, wrap_lines=True)
+
+            st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Send after connection accepted)</div>', unsafe_allow_html=True)
+            dm2 = d2.get("full_dm_under_95_words", "")
+            st.code(dm2, language=None, wrap_lines=True)
+        elif contacts and len(contacts) == 1 and fallback_note:
+            st.markdown('<div class="contact-title">Direct Application Cover Note</div>', unsafe_allow_html=True)
+            st.code(fallback_note, language=None, wrap_lines=True)
+
+    st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+    b_col1, b_col2 = st.columns(2)
+    with b_col1:
+        if sel_job["status"] == "CONNECT_SENT":
+            if st.button("✉️ Mark as Referral Asked (DM Sent)", type="primary", width="stretch", key=f"mark_asked_{sel_job['job_id']}"):
+                update_single_job_status(sel_job["job_id"], "ASKED_REFERRAL")
+                st.toast("Status updated to ASKED_REFERRAL! 48-hour follow-up timer is active.")
+                st.rerun()
+        elif sel_job["status"] == "ASKED_REFERRAL":
+            if st.button("✅ Mark as Applied via Referral", type="primary", width="stretch", key=f"mark_app_ref_{sel_job['job_id']}"):
+                update_single_job_status(sel_job["job_id"], "APPLIED_VIA_REFERRAL")
+                st.toast("Status updated to APPLIED_VIA_REFERRAL!")
+                st.rerun()
+    with b_col2:
+        if sel_job["status"] in ("CONNECT_SENT", "ASKED_REFERRAL"):
+            if st.button("↗ Mark Applied Direct (No Referral)", width="stretch", key=f"mark_app_dir_{sel_job['job_id']}"):
+                update_single_job_status(sel_job["job_id"], "APPLIED_DIRECT")
+                st.toast("Status updated to APPLIED_DIRECT!")
+                st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # -----------------------------------------------------------------------------

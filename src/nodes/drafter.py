@@ -70,6 +70,27 @@ def _build_outreach_prompt(
 ) -> str:
     """Builds the structured LLM prompt tailored to contact seniority and domain context."""
     first_name = contact.name.split()[0] if contact.name else "there"
+    is_bits = (contact.tier == "1_ALUMNI")
+
+    alumni_guidance = (
+        "- ALUMNI STATUS: Verified BITS Pilani alumnus. Mention the shared BITS Pilani connection naturally "
+        "('fellow BITSian here (2027 batch)' or 'fellow BITSian building in AI')."
+        if is_bits else
+        "- ALUMNI STATUS: NOT from BITS Pilani (Tier: " + contact.tier + "). CRITICAL: DO NOT mention BITS, BITSian, "
+        "or college connection under any circumstance! Mentioning BITS to a non-alumni is completely false. "
+        "Frame connection strictly around their engineering work, team, or domain at " + intel.company_name + "."
+    )
+
+    example_senior = (
+        f'"Hi {first_name}, fellow BITSian here. Following your leadership in {intel.company_name}\'s engineering—would value your perspective as an aspiring AI engineer!"'
+        if is_bits else
+        f'"Hi {first_name}, following your leadership in {intel.company_name}\'s engineering—would value your guidance as an aspiring AI engineer!"'
+    )
+    example_peer = (
+        f'"Hi {first_name}, fellow BITSian here (2027 batch). Came across your work at {intel.company_name}—would love to connect and follow your team\'s updates!"'
+        if is_bits else
+        f'"Hi {first_name}, came across your work in tech at {intel.company_name}—would love to connect and follow what your team is building!"'
+    )
 
     return f"""You are drafting a 2-stage human networking package for Param Patel, a 2027 graduate from BITS Pilani applying for {job.role} at {intel.company_name}.
 
@@ -79,6 +100,7 @@ CONTACT CONTEXT:
 - Seniority Tier: {seniority}
 - Contact Tier: {contact.tier}
 - Relevance / Journey Note: {contact.relevance_note}
+{alumni_guidance}
 
 COMPANY & ROLE CONTEXT:
 - Company: {intel.company_name}
@@ -92,7 +114,7 @@ TONE GUIDELINES BY SENIORITY:
 - If Senior/Leadership (Managers, Directors, Heads, Staff, Leads, VPs):
   Keep it highly respectful and concise. Acknowledge their leadership or tenure, and frame the connection around seeking brief industry perspective or advice from a veteran. (Do NOT treat them like a college peer).
 - If Peer/Junior (Engineers, SDE-1/2, Analysts):
-  Keep it collaborative, warm, and humble, highlighting shared engineering domains or BITS Pilani alumni connection ("fellow BITSian building in your space").
+  Keep it collaborative, warm, and humble, highlighting shared engineering domains. Only mention BITS if Contact Tier is 1_ALUMNI.
 
 HYPER-PERSONALIZATION RULE:
 You MUST explicitly reference at least one specific technical team, domain, or detail mentioned in their headline or company context (e.g., if their headline mentions "Agentic AI", "Data Infrastructure", or "Computer Vision", you must mention that exact topic).
@@ -103,8 +125,8 @@ STAGE 1: connection_note_300_chars (LinkedIn free-tier "Add a note" modal):
 - HARD LIMIT: MUST be STRICTLY UNDER 190 characters (including spaces and punctuation). LinkedIn has a strict 200-char limit for free accounts.
 - ZERO REFERRAL ASK: Do NOT ask for a referral or interview here.
 - FRAME: Advice, following their work, or connecting as an aspiring engineer.
-- Example for Senior/Leadership: "Hi {first_name}, fellow BITSian here. Following your leadership in {intel.company_name}'s AI initiatives—would love to connect and learn from your engineering journey!" (<175 chars)
-- Example for Peer/Junior: "Hi {first_name}, fellow BITSian here (2027 batch). Came across your work in AI at {intel.company_name}—would love to connect and follow your team's updates!" (<165 chars)
+- Example for Senior/Leadership: {example_senior} (<185 chars)
+- Example for Peer/Junior: {example_peer} (<175 chars)
 
 STAGE 2: full_dm_under_95_words (Sent AFTER they accept the connection):
 - HARD LIMIT: MUST be STRICTLY UNDER 85 words.
@@ -133,6 +155,16 @@ def _sanitize_outreach_package(
 
     # 1. Sanitize connection note (MUST be strictly <= 190 chars)
     note = pkg.connection_note_300_chars.strip()
+
+    # Guard against hallucinated BITSian mentions for non-alumni contacts
+    if contact.tier != "1_ALUMNI":
+        note = re.sub(r"(?i)\bfellow\s+bitsian\s+here\s*(\([^\)]*\))?[,\.\-—\s]*", "", note)
+        note = re.sub(r"(?i)\bbitsian\b", "engineer", note)
+        note = re.sub(r"(?i)\bbits\s+pilani\b", "", note)
+        if not note.startswith("Hi") and not note.startswith("Hello"):
+            first_name = contact.name.split()[0] if contact.name else "there"
+            note = f"Hi {first_name}, " + note.lstrip(",.- ")
+
     if len(note) > 190:
         sub = note[:190]
         # Look for last sentence boundary before 190
@@ -206,16 +238,29 @@ def generate_outreach_for_job(
         except Exception as e:
             logger.error(f"[Drafter] Failed to draft outreach for {contact.name}: {e}")
             # Robust seniority-aware fallback draft under 190 characters
-            if seniority == "Senior/Leadership":
-                fallback_note = (
-                    f"Hi {first_name}, fellow BITSian here. Following your leadership in engineering at "
-                    f"{job.company}—would value your guidance as an aspiring AI engineer!"
-                )[:189]
+            is_bits = (contact.tier == "1_ALUMNI")
+            if is_bits:
+                if seniority == "Senior/Leadership":
+                    fallback_note = (
+                        f"Hi {first_name}, fellow BITSian here. Following your leadership in engineering at "
+                        f"{job.company}—would value your guidance as an aspiring AI engineer!"
+                    )[:189]
+                else:
+                    fallback_note = (
+                        f"Hi {first_name}, fellow BITSian here (2027 batch). Came across your work at "
+                        f"{job.company}—would love to connect and follow your team's engineering updates!"
+                    )[:189]
             else:
-                fallback_note = (
-                    f"Hi {first_name}, fellow BITSian here (2027 batch). Came across your work at "
-                    f"{job.company}—would love to connect and follow your team's engineering updates!"
-                )[:189]
+                if seniority == "Senior/Leadership":
+                    fallback_note = (
+                        f"Hi {first_name}, following your engineering leadership at "
+                        f"{job.company}—would value your guidance as an aspiring AI engineer!"
+                    )[:189]
+                else:
+                    fallback_note = (
+                        f"Hi {first_name}, came across your work in tech at "
+                        f"{job.company}—would love to connect and follow your team's engineering updates!"
+                    )[:189]
 
             fallback_dm = (
                 f"Hi {first_name}, thank you for connecting! I am applying for the {job.role} position at {job.company} ({job.job_url}). "

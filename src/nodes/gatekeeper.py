@@ -54,9 +54,11 @@ SENIOR_REGEX = re.compile("|".join(SENIOR_LEADERSHIP_PATTERNS), re.IGNORECASE)
 # Technical role tokens required to pass
 RELEVANT_ROLE_TOKENS = [
     r"\bai\b", r"\bml\b", r"\bmachine learning\b", r"\bdeep learning\b",
-    r"\bdata scientist\b", r"\bapplied scientist\b", r"\bllm\b",
-    r"\bgenai\b", r"\bnlp\b", r"\bvision\b", r"\bresearch\b",
-    r"software engineer\s*-\s*ai", r"\bfounding engineer\b"
+    r"\bdata scientist\b", r"\bdata science\b", r"\bapplied scientist\b",
+    r"\bllm\b", r"\bgenai\b", r"\bnlp\b", r"\bvision\b", r"\bresearch\b",
+    r"\bsoftware engineer\b", r"\bsoftware developer\b", r"\bsde\b",
+    r"\bbackend\b", r"\bfull stack\b", r"\bdata engineer\b",
+    r"\bpython\b", r"\bfounding engineer\b", r"\bmember of technical staff\b", r"\bmts\b"
 ]
 RELEVANT_ROLE_REGEX = re.compile("|".join(RELEVANT_ROLE_TOKENS), re.IGNORECASE)
 
@@ -77,8 +79,9 @@ REMOTE_SOURCES = {"wwr", "himalayas", "ycombinator", "wellfound", "otta"}
 
 def extract_min_yoe(jd_text: str) -> int:
     """
-    Extracts the minimum years of experience required from the JD text using regex.
-    Returns the integer extracted, or 0 if no strict experience requirement >= 3 is detected.
+    Extracts the minimum required years of experience from the JD text.
+    Ignores 'preferred', 'nice to have', 'bonus', or company age statements.
+    Returns the integer extracted, or 0 if no strict requirement >= 4 is detected.
     """
     if not jd_text:
         return 0
@@ -86,11 +89,20 @@ def extract_min_yoe(jd_text: str) -> int:
     # Pattern 1: e.g. "3+ years of experience", "5-7 yrs relevant exp", "4 years experience"
     p1 = r"\b([3-9]|[1-9]\d+)\+?\s*(?:-\s*\d+\s*)?(?:years?|yrs?)(?:\s+of)?\s+(?:relevant\s+|industry\s+|professional\s+)?(?:experience|exp)\b"
     # Pattern 2: e.g. "minimum 4 years", "at least 3 yrs", "requires 5 years"
-    p2 = r"(?:minimum|at least|requires?)\s+([3-9]|[1-9]\d+)\+?\s*(?:years?|yrs?)"
+    p2 = r"(?:minimum|at least|requires?|must have)\s+([3-9]|[1-9]\d+)\+?\s*(?:years?|yrs?)"
 
     matches: List[int] = []
 
+    def is_preferred_or_non_requirement(start_pos: int) -> bool:
+        """Checks if match is inside a 'preferred' or company-history context."""
+        window_start = max(0, start_pos - 50)
+        preceding = jd_text[window_start:start_pos].lower()
+        non_req_tokens = ["preferred", "nice to have", "bonus", "plus", "ideal", "company", "business", "our team"]
+        return any(tok in preceding for tok in non_req_tokens)
+
     for m in re.finditer(p1, jd_text, re.IGNORECASE):
+        if is_preferred_or_non_requirement(m.start()):
+            continue
         try:
             val = int(m.group(1))
             matches.append(val)
@@ -98,6 +110,8 @@ def extract_min_yoe(jd_text: str) -> int:
             pass
 
     for m in re.finditer(p2, jd_text, re.IGNORECASE):
+        if is_preferred_or_non_requirement(m.start()):
+            continue
         try:
             val = int(m.group(1))
             matches.append(val)
@@ -175,10 +189,10 @@ def filter_jobs(
             stats["dropped_irrelevant_role"] += 1
             continue
 
-        # 6. Experience (YoE) Extraction & Gate
+        # 6. Experience (YoE) Extraction & Gate (Allow up to 3 years for entry/early-career)
         extracted_yoe = extract_min_yoe(job.jd_text)
         job.extracted_max_yoe = extracted_yoe
-        if extracted_yoe > 2:
+        if extracted_yoe > 3:
             stats["dropped_high_yoe"] += 1
             continue
 

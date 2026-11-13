@@ -77,8 +77,10 @@ def parse_linkedin_search_result(item: Dict[str, str], tier: str, company: str =
     name, headline = parse_linkedin_title(cleaned_title)
     if not name:
         name = cleaned_title
-    if not headline:
-        headline = extract_cleaned_headline(cleaned_title, company)
+    
+    canonical_comp, _ = normalize_company_name(company) if company else ("", [])
+    if not headline or (company and headline.strip().lower() in (company.strip().lower(), canonical_comp)):
+        headline = extract_cleaned_headline(cleaned_title, company, snippet=raw_content)
 
     # Name sanity check: name should not be too long or contain generic/corporate phrases
     name_lower = name.lower().strip()

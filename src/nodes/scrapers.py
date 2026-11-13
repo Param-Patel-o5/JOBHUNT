@@ -138,11 +138,25 @@ def scrape_wwr_rss() -> List[JobPosting]:
 # =====================================================================
 
 GREENHOUSE_SLUGS = [
-    "scaleai", "gleanwork", "databricks", "stripe", "rubrik"
+    "scaleai", "gleanwork", "databricks", "stripe", "rubrik",
+    "cohere", "appliedintuition", "figure", "instacart", "gusto",
+    "ramp", "affirm", "brex", "flexport", "plaid", "toast",
+    "reddit", "samsara", "postman", "razorpay", "cred", "swiggy",
+    "groww", "meesho", "zepto", "inmobi", "deepgram", "tavily"
 ]
 
-ASHBY_SLUGS = ["perplexity", "langchain", "elevenlabs", "linear"]
-LEVER_SLUGS: List[str] = []
+ASHBY_SLUGS = [
+    "perplexity", "langchain", "elevenlabs", "linear",
+    "together-ai", "mistral", "cursor", "modal", "poolside",
+    "anysphere", "cognition", "baseten", "suno", "pika",
+    "harvey", "character", "character-ai", "cartesia",
+    "factory", "magic-dev", "replit", "decagon", "sierra"
+]
+
+LEVER_SLUGS = [
+    "palantir", "atlassian", "spotify", "dataminr", "automattic",
+    "duolingo", "gitlab", "discord", "huggingface"
+]
 
 TECH_TITLE_KEYWORDS = [
     "ai", "ml", "machine learning", "deep learning", "nlp", "computer vision",
@@ -156,7 +170,7 @@ INDIA_REMOTE_LOCATIONS = [
 
 def _poll_himalayas(client: httpx.Client) -> List[JobPosting]:
     postings: List[JobPosting] = []
-    queries = ["AI Engineer", "Machine Learning"]
+    queries = ["AI Engineer", "Machine Learning", "GenAI", "LLM", "Data Scientist"]
 
     for q in queries:
         url = "https://himalayas.app/jobs/api/search"
@@ -378,11 +392,14 @@ def scrape_public_json_apis() -> List[JobPosting]:
 
 DORK_QUERIES = [
     ('site:welcometothejungle.com/en/companies/*/jobs ("AI Engineer" OR "Machine Learning" OR "LLM") ("India" OR "Remote")', "otta"),
-    ('site:otta.com/jobs ("AI Engineer" OR "Machine Learning")', "otta"),
+    ('site:otta.com/jobs ("AI Engineer" OR "Machine Learning" OR "GenAI")', "otta"),
     ('site:wellfound.com/jobs ("AI Engineer" OR "Machine Learning" OR "GenAI") ("India" OR "Bangalore" OR "Hyderabad" OR "Remote")', "wellfound"),
     ('site:ycombinator.com/companies/*/jobs ("AI" OR "Machine Learning" OR "LLM") ("India" OR "Remote")', "ycombinator"),
-    ('site:workatastartup.com/jobs ("AI" OR "Machine Learning")', "ycombinator"),
+    ('site:workatastartup.com/jobs ("AI" OR "Machine Learning" OR "GenAI")', "ycombinator"),
     ('site:instahyre.com/job- ("AI" OR "Machine Learning" OR "Data Scientist")', "instahyre"),
+    ('site:jobs.ashbyhq.com ("AI Engineer" OR "Machine Learning" OR "LLM") ("India" OR "Remote")', "ashby"),
+    ('site:boards.greenhouse.io ("AI Engineer" OR "Machine Learning" OR "GenAI") ("India" OR "Remote" OR "Bengaluru")', "greenhouse"),
+    ('site:jobs.lever.co ("AI Engineer" OR "Machine Learning" OR "Deep Learning") ("India" OR "Remote" OR "Bengaluru")', "lever"),
 ]
 
 
@@ -596,7 +613,15 @@ def scrape_linkedin_glassdoor() -> List[JobPosting]:
         logger.error("[JobSpy] python-jobspy is not installed. Skipping Channel 4.")
         return []
 
-    search_terms = ["AI Engineer", "Machine Learning Engineer", "GenAI Engineer"]
+    search_terms = [
+        "AI Engineer",
+        "Machine Learning Engineer",
+        "GenAI Engineer",
+        "Junior AI Engineer",
+        "Associate AI Engineer",
+        "LLM Engineer",
+        "Applied AI Engineer",
+    ]
 
     for term in search_terms:
         try:
@@ -605,9 +630,9 @@ def scrape_linkedin_glassdoor() -> List[JobPosting]:
                 site_name=["linkedin", "glassdoor"],
                 search_term=term,
                 location="India",
-                results_wanted=10,
+                results_wanted=15,
                 hours_old=48,
-                linkedin_fetch_description=True,
+                fetch_description=True,
             )
 
             if jobs_df is None or jobs_df.empty:
