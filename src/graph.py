@@ -24,7 +24,7 @@ from src.nodes.scrape import run_all_scrapers
 from src.nodes.filter import filter_jobs
 from src.nodes.company_intel import evaluate_companies_for_jobs
 from src.nodes.evaluate import score_and_tailor_jobs
-from src.nodes.people_finder import find_contacts_for_company, find_hr_email_for_company
+from src.nodes.enrich import find_contacts_for_company, find_hr_email_for_company
 from src.nodes.drafter import generate_outreach_for_job
 
 logger = logging.getLogger("pipeline.graph")
@@ -103,18 +103,18 @@ def enrichment_node(state: JobHuntGraphState) -> Dict[str, Any]:
     for i, (job, intel, match_result) in enumerate(scored_results, 1):
         logger.info(f"[enrichment_node] [{i}/{len(scored_results)}] Processing '{job.company}' - '{job.role}'")
 
-        # 2. Discover Contacts (People Finder)
+        # 2. Discover Contacts (Enrichment Layer - Up to 4 verified contacts)
         try:
-            contacts = find_contacts_for_company(job.company, job.role)
+            contacts = find_contacts_for_company(job.company, job.role, max_contacts=4)
         except Exception as e:
-            logger.error(f"[enrichment_node] People finder failed for {job.company}: {e}")
+            logger.error(f"[enrichment_node] Contact discovery failed for {job.company}: {e}")
             contacts = []
 
-        # 3. Discover HR / Recruiting Email
+        # 3. Discover Direct Human or Recruiting Email
         try:
-            hr_email = find_hr_email_for_company(job.company, job.job_url, job.jd_text)
+            hr_email = find_hr_email_for_company(job.company, job.job_url, job.jd_text, contacts=contacts)
         except Exception as e:
-            logger.warning(f"[enrichment_node] HR email discovery failed for {job.company}: {e}")
+            logger.warning(f"[enrichment_node] Email discovery failed for {job.company}: {e}")
             hr_email = ""
 
         # 4. Generate Outreach Drafts (Drafter)

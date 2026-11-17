@@ -43,6 +43,15 @@ class ContactPerson(BaseModel):
     linkedin_url: str
     tier: Literal["1_ALUMNI", "2_TEAM_ENGINEER_OR_HM", "3_RECRUITER"]
     relevance_note: str = Field(description="Why this person was picked, e.g., 'BITS Pilani 2023 alum working on ML infra'")
+    email: Optional[str] = Field(default="", description="Direct human email discovered via Hunter.io or pattern")
+    email_status: Optional[str] = Field(default="", description="VERIFIED or PATTERN_GUESS")
+    current_company: Optional[str] = None
+    current_title: Optional[str] = None
+    is_bits_alum: bool = False
+    bits_type: Literal["FULL_TIME", "WILP", "NONE"] = "NONE"
+    stated_ai_ml_interest: bool = False
+    years_experience_level: Literal["senior", "mid", "junior"] = "junior"
+    mutual_connections: bool = False
 
 
 class OutreachPackage(BaseModel):

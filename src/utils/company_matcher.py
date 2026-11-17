@@ -67,7 +67,7 @@ LEGAL_REGIONAL_SUFFIXES: List[str] = [
 
 # Regex for past-tenure indicators (scanned within the 25 chars immediately preceding the company mention)
 PAST_TENURE_REGEX = re.compile(
-    r"(?:\bex[-–—\s]+|\bformer\b|\bformerly\b|\bprev\b|\bpreviously\b|\bprior\b|\bpast\b[:\s]*)",
+    r"(?:\bex[-–—\s]+|\bformer\b|\bformerly\b|\bprev\b|\bpreviously\b|\bprior\b|\bpast\b[:\s]*|\bincoming\b[:\s]*)",
     re.IGNORECASE
 )
 
@@ -246,15 +246,20 @@ def verify_contact_company(
     # Scan the 25 characters immediately preceding ANY match of company in title or snippet.
     # -------------------------------------------------------------------------
     def has_past_indicator_preceding(text: str, token: str) -> bool:
-        """Checks if any occurrence of token in text is preceded by past indicators within 25 chars."""
-        # Find all word-bounded occurrences of token in text
+        """Checks if any occurrence of token in text is preceded by past indicators within the same clause or window."""
         pattern = rf"\b{re.escape(token)}\b"
-        found_any = False
         for m in re.finditer(pattern, text, re.IGNORECASE):
-            found_any = True
             start_idx = m.start()
-            window_start = max(0, start_idx - 25)
-            preceding_window = text[window_start:start_idx]
+            preceding_text = text[:start_idx]
+            # Clause break boundaries so past indicator belonging to a prior clause doesn't contaminate
+            clause_break = max(
+                preceding_text.rfind("|"),
+                preceding_text.rfind("•"),
+                preceding_text.rfind("·"),
+                preceding_text.rfind(";"),
+                max(0, start_idx - 80)
+            )
+            preceding_window = text[clause_break:start_idx]
             if PAST_TENURE_REGEX.search(preceding_window):
                 return True
         return False
@@ -267,8 +272,15 @@ def verify_contact_company(
             return False
         for m in occurrences:
             start_idx = m.start()
-            window_start = max(0, start_idx - 25)
-            preceding_window = text[window_start:start_idx]
+            preceding_text = text[:start_idx]
+            clause_break = max(
+                preceding_text.rfind("|"),
+                preceding_text.rfind("•"),
+                preceding_text.rfind("·"),
+                preceding_text.rfind(";"),
+                max(0, start_idx - 80)
+            )
+            preceding_window = text[clause_break:start_idx]
             if not PAST_TENURE_REGEX.search(preceding_window):
                 # Found at least one occurrence that is NOT preceded by past indicators
                 return False
@@ -395,3 +407,148 @@ def verify_contact_company(
         return False, 0.0, "Rejected: Weak snippet mention only"
 
     return False, 0.0, "Rejected: No active employer match"
+
+
+# =========================================================================
+# Structured Contact Signals Extractor
+# =========================================================================
+
+INTERN_ROLE_REGEX = re.compile(
+    r"\b(?:intern|internship|summer\s+analyst|trainee|apprentice|co-?op)\b",
+    re.IGNORECASE
+)
+
+BITS_CAMPUS_REGEX = re.compile(
+    r"\b(?:bits\s+pilani|birla\s+institute\s+of\s+technology\s+(?:and|&)\s*science|bits\s+hyderabad|bits\s+goa|bphc|bits\s+wilp)\b",
+    re.IGNORECASE
+)
+
+BITS_WILP_REGEX = re.compile(
+    r"\b(?:wilp|work\s+integrated)\b",
+    re.IGNORECASE
+)
+
+AI_ML_INTEREST_REGEX = re.compile(
+    r"\b(?:ai|ml|machine\s+learning|llm|llms|agent|agents|agentic|rag|nlp|deep\s+learning|genai|gen\s*ai|generative\s+ai|data\s+science|data\s+scientist)\b",
+    re.IGNORECASE
+)
+
+SENIOR_TITLE_REGEX = re.compile(
+    r"\b(?:senior|sr\.?|staff|principal|lead|manager|director|head|vp|cto|founder|architect)\b",
+    re.IGNORECASE
+)
+
+MID_TITLE_REGEX = re.compile(
+    r"\b(?:sde\s*(?:ii|2|two)|engineer\s*(?:ii|2|3|iii)|ml\s+engineer|machine\s+learning\s+engineer|mts|member\s+of\s+technical\s+staff)\b",
+    re.IGNORECASE
+)
+
+MUTUAL_CONNECTIONS_REGEX = re.compile(
+    r"\bmutual\s+connections?\b",
+    re.IGNORECASE
+)
+
+
+def verify_and_extract_contact_signals(
+    target_company: str,
+    linkedin_title: str,
+    linkedin_snippet: str = ""
+) -> dict:
+    """
+    Strict Active-Company & Non-Intern Verifier and Profile Signal Extractor.
+    - Rule A: Target company MUST appear in active current role clause or snippet Experience block.
+      Preceding 'Ex-', 'Former', 'Previously', or 'Incoming' results in hard reject.
+    - Rule B: Hard reject interns and short-tenure trainees unless snippet explicitly shows >1 year tenure.
+    - Rule C: Extracts structured signals for personalized outreach:
+        * current_company
+        * current_title
+        * is_bits_alum (bool)
+        * bits_type ("FULL_TIME" | "WILP" | "NONE")
+        * stated_ai_ml_interest (bool - only if person's own words state it)
+        * years_experience_level ("senior" | "mid" | "junior")
+        * mutual_connections (bool)
+    """
+    default_signals = {
+        "is_valid": False,
+        "rejection_reason": None,
+        "current_company": "",
+        "current_title": "",
+        "is_bits_alum": False,
+        "bits_type": "NONE",
+        "stated_ai_ml_interest": False,
+        "years_experience_level": "junior",
+        "mutual_connections": False,
+    }
+
+    if not target_company or not linkedin_title:
+        default_signals["rejection_reason"] = "Rejected: Missing company name or title"
+        return default_signals
+
+    # 1. Rule A: Active Company Verification
+    is_valid_comp, conf, reason = verify_contact_company(target_company, linkedin_title, linkedin_snippet)
+    if not is_valid_comp:
+        default_signals["rejection_reason"] = reason
+        return default_signals
+
+    # Extract current_title and current_company
+    norm_target, _ = normalize_company_name(target_company)
+    name, headline_segment = parse_linkedin_title(linkedin_title)
+    cleaned_hl = extract_cleaned_headline(linkedin_title, target_company, linkedin_snippet)
+
+    # Isolate role title from active clause
+    current_title = cleaned_hl
+    # Strip trailing company mentions like "at TargetCompany" or "@ TargetCompany"
+    clean_title = re.sub(rf"\s*(?:at|@|[-–—])\s*.*$", "", current_title, flags=re.IGNORECASE).strip()
+    if not clean_title or clean_title.lower() == target_company.lower() or clean_title.lower() == norm_target.lower():
+        # Fallback to role from headline or snippet
+        m_role = re.search(r"(?:^|[\-–—|•·])\s*([a-zA-Z0-9\s/]+?)\s+(?:at|@)\s+", linkedin_title, re.IGNORECASE)
+        clean_title = m_role.group(1).strip() if m_role else f"Engineer at {target_company}"
+
+    current_title = clean_title
+
+    # 2. Rule B: Hard Reject Interns & Short-Tenure Trainees
+    if INTERN_ROLE_REGEX.search(current_title):
+        has_long_tenure = bool(re.search(r"\b(?:[2-9]|\d{2,})\s*(?:years?|yrs?)\b|\b1\s*(?:year|yr)\s+[1-9]\d*\s*mos?\b", linkedin_snippet, re.IGNORECASE))
+        if not has_long_tenure:
+            default_signals["is_valid"] = False
+            default_signals["rejection_reason"] = "Rejected: Intern / Short-tenure trainee role"
+            default_signals["current_company"] = target_company
+            default_signals["current_title"] = current_title
+            return default_signals
+
+    # 3. Rule C: Extract Structured Profile Signals
+    combined_text = f"{linkedin_title} {linkedin_snippet}"
+
+    # BITS Alumni Signal
+    is_bits = bool(BITS_CAMPUS_REGEX.search(combined_text))
+    bits_type = "NONE"
+    if is_bits:
+        bits_type = "WILP" if BITS_WILP_REGEX.search(combined_text) else "FULL_TIME"
+
+    # Stated AI/ML Interest (person's own words, excluding company name)
+    text_without_company = re.sub(rf"\b{re.escape(norm_target)}\b", "", combined_text, flags=re.IGNORECASE)
+    text_without_company = re.sub(rf"\b{re.escape(target_company)}\b", "", text_without_company, flags=re.IGNORECASE)
+    stated_ai = bool(AI_ML_INTEREST_REGEX.search(text_without_company))
+
+    # Seniority Level
+    if SENIOR_TITLE_REGEX.search(current_title):
+        exp_level = "senior"
+    elif MID_TITLE_REGEX.search(current_title):
+        exp_level = "mid"
+    else:
+        exp_level = "junior"
+
+    # Mutual Connections
+    has_mutual = bool(MUTUAL_CONNECTIONS_REGEX.search(linkedin_snippet))
+
+    return {
+        "is_valid": True,
+        "rejection_reason": None,
+        "current_company": target_company,
+        "current_title": current_title,
+        "is_bits_alum": is_bits,
+        "bits_type": bits_type,
+        "stated_ai_ml_interest": stated_ai,
+        "years_experience_level": exp_level,
+        "mutual_connections": has_mutual,
+    }

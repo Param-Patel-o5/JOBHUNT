@@ -550,22 +550,55 @@ def render_triage_queue():
         unsafe_allow_html=True,
     )
 
-    # 5. Side-by-Side Outreach Contacts (Two-Stage Human Networking)
+    # 5. Outreach Contacts (Two-Stage Human Networking)
     drafts = parse_json_safely(job.get("outreach_drafts_json"))
     fallback_note = job.get("fallback_note")
 
-    col_c1, col_c2 = st.columns(2)
+    if contacts and len(contacts) > 2:
+        contact_tabs = st.tabs([
+            f"Contact {i+1}: {c.get('name', 'Contact')} ({format_contact_tier(c.get('tier', ''))})"
+            for i, c in enumerate(contacts)
+        ])
+        for idx, tab in enumerate(contact_tabs):
+            with tab:
+                c = contacts[idx]
+                d = drafts[idx] if drafts and idx < len(drafts) else {}
+                tier_badge = format_contact_tier(c.get("tier", ""))
+                email_val = c.get("email") or ""
+                email_status = c.get("email_status") or "PATTERN_GUESS"
+                email_badge = f" &nbsp;·&nbsp; ✉️ <b>{email_val}</b> ({email_status})" if email_val else ""
+                st.markdown(
+                    f"""
+                    <div class="contact-title">{c.get('name', 'Team Member')}</div>
+                    <div class="contact-meta">{tier_badge} &nbsp;·&nbsp; {c.get('headline', '')}{email_badge}</div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                if c.get("linkedin_url"):
+                    st.link_button(f"Open LinkedIn Profile ({c.get('name')})", c.get("linkedin_url"), width="stretch")
 
-    # Contact 1
-    with col_c1:
-        if contacts and len(contacts) > 0:
+                st.markdown('<div class="step-box-header">STEP 1: Connection Request Note (Mentor/Advice Frame — ≤ 190 chars)</div>', unsafe_allow_html=True)
+                note = d.get("connection_note_300_chars", f"Hi {c.get('name', '').split()[0]}, came across your work at {job['company']}. Would love to connect!")
+                st.code(note, language=None, wrap_lines=True)
+
+                st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Plain English Proof + Low-Hassle Referral Ask — ≤ 85 words)</div>', unsafe_allow_html=True)
+                dm = d.get("full_dm_under_95_words", f"Hi {c.get('name', '').split()[0]}, thanks for connecting! I'm applying for {job['role']} at {job['company']}. My work: https://parampatel-ai.vercel.app")
+                st.code(dm, language=None, wrap_lines=True)
+
+    elif contacts and len(contacts) > 0:
+        col_c1, col_c2 = st.columns(2)
+        # Contact 1
+        with col_c1:
             c1 = contacts[0]
             d1 = drafts[0] if drafts and len(drafts) > 0 else {}
             tier_badge = format_contact_tier(c1.get("tier", ""))
+            e1 = c1.get("email") or ""
+            e1_st = c1.get("email_status") or "PATTERN_GUESS"
+            e1_badge = f" &nbsp;·&nbsp; ✉️ <b>{e1}</b> ({e1_st})" if e1 else ""
             st.markdown(
                 f"""
                 <div class="contact-title">Contact 1: {c1.get('name', 'Team Member')}</div>
-                <div class="contact-meta">{tier_badge} &nbsp;·&nbsp; {c1.get('headline', '')}</div>
+                <div class="contact-meta">{tier_badge} &nbsp;·&nbsp; {c1.get('headline', '')}{e1_badge}</div>
                 """,
                 unsafe_allow_html=True,
             )
@@ -573,45 +606,49 @@ def render_triage_queue():
                 st.link_button(f"Open LinkedIn Profile ({c1.get('name')})", c1.get("linkedin_url"), width="stretch")
 
             st.markdown('<div class="step-box-header">STEP 1: Connection Request Note (Mentor/Advice Frame — ≤ 190 chars)</div>', unsafe_allow_html=True)
-            note1 = d1.get("connection_note_300_chars", f"Hi {c1.get('name', '').split()[0]}, fellow BITSian here. Would love to connect and learn about your work at {job['company']}!")
+            note1 = d1.get("connection_note_300_chars", f"Hi {c1.get('name', '').split()[0]}, came across your work at {job['company']}. Would love to connect!")
             st.code(note1, language=None, wrap_lines=True)
 
             st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Plain English Proof + Low-Hassle Referral Ask — ≤ 85 words)</div>', unsafe_allow_html=True)
             dm1 = d1.get("full_dm_under_95_words", f"Hi {c1.get('name', '').split()[0]}, thanks for connecting! I'm applying for {job['role']} at {job['company']}. My work: https://parampatel-ai.vercel.app")
             st.code(dm1, language=None, wrap_lines=True)
-        elif fallback_note:
+
+        # Contact 2 or Fallback
+        with col_c2:
+            if len(contacts) > 1:
+                c2 = contacts[1]
+                d2 = drafts[1] if drafts and len(drafts) > 1 else {}
+                tier_badge = format_contact_tier(c2.get("tier", ""))
+                e2 = c2.get("email") or ""
+                e2_st = c2.get("email_status") or "PATTERN_GUESS"
+                e2_badge = f" &nbsp;·&nbsp; ✉️ <b>{e2}</b> ({e2_st})" if e2 else ""
+                st.markdown(
+                    f"""
+                    <div class="contact-title">Contact 2: {c2.get('name', 'Team Member')}</div>
+                    <div class="contact-meta">{tier_badge} &nbsp;·&nbsp; {c2.get('headline', '')}{e2_badge}</div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                if c2.get("linkedin_url"):
+                    st.link_button(f"Open LinkedIn Profile ({c2.get('name')})", c2.get("linkedin_url"), width="stretch")
+
+                st.markdown('<div class="step-box-header">STEP 1: Connection Request Note (Mentor/Advice Frame — ≤ 190 chars)</div>', unsafe_allow_html=True)
+                note2 = d2.get("connection_note_300_chars", f"Hi {c2.get('name', '').split()[0]}, came across your work at {job['company']}. Would love to connect!")
+                st.code(note2, language=None, wrap_lines=True)
+
+                st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Plain English Proof + Low-Hassle Referral Ask — ≤ 85 words)</div>', unsafe_allow_html=True)
+                dm2 = d2.get("full_dm_under_95_words", f"Hi {c2.get('name', '').split()[0]}, thanks for connecting! Applying for {job['role']} at {job['company']}. My work: https://parampatel-ai.vercel.app")
+                st.code(dm2, language=None, wrap_lines=True)
+            elif fallback_note:
+                st.markdown('<div class="contact-title">Direct Application Cover Note</div>', unsafe_allow_html=True)
+                st.markdown('<div class="contact-meta">Alternative direct apply note for ATS cover letter</div>', unsafe_allow_html=True)
+                st.code(fallback_note, language=None, wrap_lines=True)
+    else:
+        if fallback_note:
             st.markdown('<div class="contact-title">Direct Application Cover Note</div>', unsafe_allow_html=True)
             st.markdown('<div class="contact-meta">Zero verified alumni found — use this tailor-fit note in application cover note</div>', unsafe_allow_html=True)
             st.code(fallback_note, language=None, wrap_lines=True)
-
-    # Contact 2 or Fallback
-    with col_c2:
-        if contacts and len(contacts) > 1:
-            c2 = contacts[1]
-            d2 = drafts[1] if drafts and len(drafts) > 1 else {}
-            tier_badge = format_contact_tier(c2.get("tier", ""))
-            st.markdown(
-                f"""
-                <div class="contact-title">Contact 2: {c2.get('name', 'Team Member')}</div>
-                <div class="contact-meta">{tier_badge} &nbsp;·&nbsp; {c2.get('headline', '')}</div>
-                """,
-                unsafe_allow_html=True,
-            )
-            if c2.get("linkedin_url"):
-                st.link_button(f"Open LinkedIn Profile ({c2.get('name')})", c2.get("linkedin_url"), width="stretch")
-
-            st.markdown('<div class="step-box-header">STEP 1: Connection Request Note (Mentor/Advice Frame — ≤ 190 chars)</div>', unsafe_allow_html=True)
-            note2 = d2.get("connection_note_300_chars", f"Hi {c2.get('name', '').split()[0]}, came across your work at {job['company']}. Would love to connect!")
-            st.code(note2, language=None, wrap_lines=True)
-
-            st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Plain English Proof + Low-Hassle Referral Ask — ≤ 85 words)</div>', unsafe_allow_html=True)
-            dm2 = d2.get("full_dm_under_95_words", f"Hi {c2.get('name', '').split()[0]}, thanks for connecting! Applying for {job['role']} at {job['company']}. My work: https://parampatel-ai.vercel.app")
-            st.code(dm2, language=None, wrap_lines=True)
-        elif contacts and len(contacts) == 1 and fallback_note:
-            st.markdown('<div class="contact-title">Direct Application Cover Note</div>', unsafe_allow_html=True)
-            st.markdown('<div class="contact-meta">Alternative direct apply note for ATS cover letter</div>', unsafe_allow_html=True)
-            st.code(fallback_note, language=None, wrap_lines=True)
-        elif not contacts and not fallback_note:
+        else:
             st.markdown('<div class="contact-title">Direct Application Cover Note</div>', unsafe_allow_html=True)
             fallback_gen = f"Hi {job['company']} team, I am applying for the {job['role']} role. My portfolio highlights production AI/ML systems: https://parampatel-ai.vercel.app"
             st.code(fallback_gen, language=None, wrap_lines=True)
@@ -663,6 +700,10 @@ def export_rich_tracker_csv(df: pd.DataFrame) -> str:
         d1 = drafts[0] if len(drafts) > 0 else {}
         c2 = contacts[1] if len(contacts) > 1 else {}
         d2 = drafts[1] if len(drafts) > 1 else {}
+        c3 = contacts[2] if len(contacts) > 2 else {}
+        d3 = drafts[2] if len(drafts) > 2 else {}
+        c4 = contacts[3] if len(contacts) > 3 else {}
+        d4 = drafts[3] if len(drafts) > 3 else {}
 
         sent_at = str(row.get("outreach_sent_at", ""))
         sent_clean = sent_at[:16] if sent_at and sent_at not in ("None", "nan") else ""
@@ -678,19 +719,31 @@ def export_rich_tracker_csv(df: pd.DataFrame) -> str:
             "Surfaced Date": created_clean,
             "Connection Sent Date": sent_clean,
             "Est CTC LPA": row.get("est_ctc_lpa", ""),
-            "HR Email": row.get("hr_email", ""),
+            "HR / Referral Email": row.get("hr_email", ""),
             "Contact 1 Name": c1.get("name", ""),
+            "Contact 1 Email": c1.get("email", ""),
             "Contact 1 Tier": c1.get("tier", ""),
             "Contact 1 Headline": c1.get("headline", ""),
             "Contact 1 LinkedIn": c1.get("linkedin_url", ""),
             "Contact 1 Step 1 Note": d1.get("connection_note_300_chars", ""),
             "Contact 1 Step 2 DM": d1.get("full_dm_under_95_words", ""),
             "Contact 2 Name": c2.get("name", ""),
+            "Contact 2 Email": c2.get("email", ""),
             "Contact 2 Tier": c2.get("tier", ""),
             "Contact 2 Headline": c2.get("headline", ""),
             "Contact 2 LinkedIn": c2.get("linkedin_url", ""),
             "Contact 2 Step 1 Note": d2.get("connection_note_300_chars", ""),
             "Contact 2 Step 2 DM": d2.get("full_dm_under_95_words", ""),
+            "Contact 3 Name": c3.get("name", ""),
+            "Contact 3 Email": c3.get("email", ""),
+            "Contact 3 LinkedIn": c3.get("linkedin_url", ""),
+            "Contact 3 Step 1 Note": d3.get("connection_note_300_chars", ""),
+            "Contact 3 Step 2 DM": d3.get("full_dm_under_95_words", ""),
+            "Contact 4 Name": c4.get("name", ""),
+            "Contact 4 Email": c4.get("email", ""),
+            "Contact 4 LinkedIn": c4.get("linkedin_url", ""),
+            "Contact 4 Step 1 Note": d4.get("connection_note_300_chars", ""),
+            "Contact 4 Step 2 DM": d4.get("full_dm_under_95_words", ""),
             "Direct Cover Note": row.get("fallback_note", ""),
             "Winning Hook": row.get("winning_hook", ""),
             "Notes": row.get("notes", ""),
@@ -846,18 +899,51 @@ def render_application_tracker():
     drafts = parse_json_safely(sel_job.get("outreach_drafts_json"))
     fallback_note = sel_job.get("fallback_note")
 
-    col_c1, col_c2 = st.columns(2)
+    if contacts and len(contacts) > 2:
+        contact_tabs = st.tabs([
+            f"Contact {i+1}: {c.get('name', 'Contact')} ({format_contact_tier(c.get('tier', ''))})"
+            for i, c in enumerate(contacts)
+        ])
+        for idx, tab in enumerate(contact_tabs):
+            with tab:
+                c = contacts[idx]
+                d = drafts[idx] if drafts and idx < len(drafts) else {}
+                tier_badge = format_contact_tier(c.get("tier", ""))
+                email_val = c.get("email") or ""
+                email_status = c.get("email_status") or "PATTERN_GUESS"
+                email_badge = f" &nbsp;·&nbsp; ✉️ <b>{email_val}</b> ({email_status})" if email_val else ""
+                st.markdown(
+                    f"""
+                    <div class="contact-title">{c.get('name', 'Team Member')}</div>
+                    <div class="contact-meta">{tier_badge} &nbsp;·&nbsp; {c.get('headline', '')}{email_badge}</div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                if c.get("linkedin_url"):
+                    st.link_button(f"Open LinkedIn Profile ({c.get('name')})", c.get("linkedin_url"), width="stretch")
 
-    # Contact 1
-    with col_c1:
-        if contacts and len(contacts) > 0:
+                st.caption("STEP 1: Connection Request Note (Sent)")
+                note = d.get("connection_note_300_chars", "")
+                st.code(note, language=None, wrap_lines=True)
+
+                st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Send after connection accepted)</div>', unsafe_allow_html=True)
+                dm = d.get("full_dm_under_95_words", "")
+                st.code(dm, language=None, wrap_lines=True)
+    elif contacts and len(contacts) > 0:
+        col_c1, col_c2 = st.columns(2)
+
+        # Contact 1
+        with col_c1:
             c1 = contacts[0]
             d1 = drafts[0] if drafts and len(drafts) > 0 else {}
             tier_badge = format_contact_tier(c1.get("tier", ""))
+            e1 = c1.get("email") or ""
+            e1_st = c1.get("email_status") or "PATTERN_GUESS"
+            e1_badge = f" &nbsp;·&nbsp; ✉️ <b>{e1}</b> ({e1_st})" if e1 else ""
             st.markdown(
                 f"""
                 <div class="contact-title">Contact 1: {c1.get('name', 'Team Member')}</div>
-                <div class="contact-meta">{tier_badge} &nbsp;·&nbsp; {c1.get('headline', '')}</div>
+                <div class="contact-meta">{tier_badge} &nbsp;·&nbsp; {c1.get('headline', '')}{e1_badge}</div>
                 """,
                 unsafe_allow_html=True,
             )
@@ -871,36 +957,39 @@ def render_application_tracker():
             st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Send after connection accepted)</div>', unsafe_allow_html=True)
             dm1 = d1.get("full_dm_under_95_words", "")
             st.code(dm1, language=None, wrap_lines=True)
-        elif fallback_note:
-            st.markdown('<div class="contact-title">Direct Application Cover Note</div>', unsafe_allow_html=True)
-            st.code(fallback_note, language=None, wrap_lines=True)
 
-    # Contact 2
-    with col_c2:
-        if contacts and len(contacts) > 1:
-            c2 = contacts[1]
-            d2 = drafts[1] if drafts and len(drafts) > 1 else {}
-            tier_badge = format_contact_tier(c2.get("tier", ""))
-            st.markdown(
-                f"""
-                <div class="contact-title">Contact 2: {c2.get('name', 'Team Member')}</div>
-                <div class="contact-meta">{tier_badge} &nbsp;·&nbsp; {c2.get('headline', '')}</div>
-                """,
-                unsafe_allow_html=True,
-            )
-            if c2.get("linkedin_url"):
-                st.link_button(f"Open LinkedIn Profile ({c2.get('name')})", c2.get("linkedin_url"), width="stretch")
+        # Contact 2
+        with col_c2:
+            if len(contacts) > 1:
+                c2 = contacts[1]
+                d2 = drafts[1] if drafts and len(drafts) > 1 else {}
+                tier_badge = format_contact_tier(c2.get("tier", ""))
+                e2 = c2.get("email") or ""
+                e2_st = c2.get("email_status") or "PATTERN_GUESS"
+                e2_badge = f" &nbsp;·&nbsp; ✉️ <b>{e2}</b> ({e2_st})" if e2 else ""
+                st.markdown(
+                    f"""
+                    <div class="contact-title">Contact 2: {c2.get('name', 'Team Member')}</div>
+                    <div class="contact-meta">{tier_badge} &nbsp;·&nbsp; {c2.get('headline', '')}{e2_badge}</div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                if c2.get("linkedin_url"):
+                    st.link_button(f"Open LinkedIn Profile ({c2.get('name')})", c2.get("linkedin_url"), width="stretch")
 
-            st.caption("STEP 1: Connection Request Note (Sent)")
-            note2 = d2.get("connection_note_300_chars", "")
-            st.code(note2, language=None, wrap_lines=True)
+                st.caption("STEP 1: Connection Request Note (Sent)")
+                note2 = d2.get("connection_note_300_chars", "")
+                st.code(note2, language=None, wrap_lines=True)
 
-            st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Send after connection accepted)</div>', unsafe_allow_html=True)
-            dm2 = d2.get("full_dm_under_95_words", "")
-            st.code(dm2, language=None, wrap_lines=True)
-        elif contacts and len(contacts) == 1 and fallback_note:
-            st.markdown('<div class="contact-title">Direct Application Cover Note</div>', unsafe_allow_html=True)
-            st.code(fallback_note, language=None, wrap_lines=True)
+                st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Send after connection accepted)</div>', unsafe_allow_html=True)
+                dm2 = d2.get("full_dm_under_95_words", "")
+                st.code(dm2, language=None, wrap_lines=True)
+            elif fallback_note:
+                st.markdown('<div class="contact-title">Direct Application Cover Note</div>', unsafe_allow_html=True)
+                st.code(fallback_note, language=None, wrap_lines=True)
+    elif fallback_note:
+        st.markdown('<div class="contact-title">Direct Application Cover Note</div>', unsafe_allow_html=True)
+        st.code(fallback_note, language=None, wrap_lines=True)
 
     st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
     b_col1, b_col2 = st.columns(2)
