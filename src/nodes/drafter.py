@@ -481,6 +481,7 @@ def generate_outreach_for_job(
     company_intel: CompanyIntel,
     match_result: MatchAndTailorResult,
     contacts: List[ContactPerson],
+    use_llm: bool = True,
 ) -> Tuple[List[OutreachPackage], Optional[str]]:
     """
     Generates tailored outreach packages for each contact following the 6-step referral DM spec,
@@ -516,6 +517,8 @@ def generate_outreach_for_job(
         )
 
         try:
+            if not use_llm:
+                raise RuntimeError("Deterministic mode requested")
             logger.info(
                 f"[Drafter] Drafting referral DM for {contact.name} ({seniority} | {opener_type}) at {job.company}"
             )

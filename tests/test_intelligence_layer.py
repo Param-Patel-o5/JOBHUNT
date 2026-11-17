@@ -1,4 +1,4 @@
-"""
+﻿"""
 Intelligence Layer Verification Script.
 
 Tests:
@@ -126,7 +126,7 @@ def test_upgraded_gatekeeper():
     surviving, stats = filter_jobs(SAMPLE_JOBS)
 
     print(f"\nInput: {stats['total_incoming']} jobs")
-    print(f"Output: {stats['passed_gatekeeper']} survived")
+    print(f"Output: {stats.get('passed_filter', 0)} survived")
     print("\nDrop breakdown:")
     for key, val in stats.items():
         if key.startswith("dropped_"):
@@ -298,8 +298,12 @@ def test_db_cache_functions():
     assert missing is None, "Should return None for uncached company!"
     print("  [OK] Cache miss returns None correctly")
 
+    import gc; gc.collect()  # flush any remaining SQLite connection refs
     if TEST_DB.exists():
-        TEST_DB.unlink()
+        try:
+            TEST_DB.unlink()
+        except PermissionError:
+            pass  # Windows file-lock: cleanup best-effort
 
     print("\n  All DB cache tests passed!")
 
@@ -328,3 +332,4 @@ if __name__ == "__main__":
     print("\n" + "=" * 70)
     print("  ALL TESTS COMPLETE")
     print("=" * 70)
+

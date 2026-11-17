@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import logging
 from pathlib import Path
@@ -73,12 +73,12 @@ def test_and_diagnose_pipeline():
     print(f" Total Incoming Jobs              : {stats['total_incoming']}")
     print(f"  [-] Dropped (Already Seen in DB): {stats['dropped_seen']}")
     print(f"  [-] Dropped (Blacklisted Company: {stats['dropped_blacklisted']}")
-    print(f"  [-] Dropped (Senior/Lead Title) : {stats['dropped_senior_title']}")
-    print(f"  [-] Dropped (Irrelevant Role)   : {stats['dropped_irrelevant_role']}")
+    print(f"  [-] Dropped (Senior/Lead Title) : {stats.get('dropped_invalid_title', 0)}")
+    print(f"  [-] Dropped (Irrelevant Role)   : {stats.get('dropped_contract_or_rlhf', 0)}")
     print(f"  [-] Dropped (High YoE > 2 years): {stats['dropped_high_yoe']}")
-    print(f"  [-] Dropped (Geo-Locked US/EU)  : {stats['dropped_geo_restricted']}")
+    print(f"  [-] Dropped (Geo-Locked US/EU)  : {stats.get('dropped_invalid_location', 0)}")
     print("-" * 80)
-    print(f" [PASS] PASSED GATEKEEPER            : {stats['passed_gatekeeper']}")
+    print(f" [PASS] PASSED GATEKEEPER            : {stats.get('passed_filter', 0)}")
     print("=" * 80)
 
     # -------------------------------------------------------------
@@ -110,3 +110,4 @@ def test_and_diagnose_pipeline():
 
 if __name__ == "__main__":
     test_and_diagnose_pipeline()
+

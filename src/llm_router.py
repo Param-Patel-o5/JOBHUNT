@@ -28,19 +28,18 @@ if not logger.handlers:
 
 T = TypeVar("T", bound=BaseModel)
 
-# 2026 AI Studio model identifiers per tier (gemini-3.5-flash-lite primary for speed & reliability)
+# Confirmed-working models only (2026-11):
+# - gemini-2.5-flash-lite  → 404 NOT FOUND (retired / unavailable)
+# - gemini-3.5-flash-lite  → 503 Timeout (frequently overloaded, causes 20-min hangs)
+# - gemini-2.5-flash       → 404 NOT FOUND
 LITE_TIER_MODELS = [
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
+    "gemini-3.1-flash-lite",   # Primary: fast, reliable, free-tier friendly
+    "gemini-3-flash-preview",  # Fallback: slightly slower but stable
 ]
 
 SMART_TIER_MODELS = [
-    "gemini-3-flash-preview",
-    "gemini-2.5-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
+    "gemini-3.1-flash-lite",   # Primary: sufficient for structured output tasks
+    "gemini-3-flash-preview",  # Fallback
 ]
 
 # Backward-compatible aliases

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Verification test for Batch Company Intel Evaluation and 503/Failover Resilience.
 
 Tests:
@@ -36,9 +36,9 @@ def test_clean_company_name():
     print("=" * 70)
 
     # Test cleaning
-    t1 = clean_company_name("Talentskeet Consulting • Bangalore Urban • Remote")
+    t1 = clean_company_name("Talentskeet Consulting â€¢ Bangalore Urban â€¢ Remote")
     assert t1 == "Talentskeet Consulting", f"Got: '{t1}'"
-    print(f"  [PASS] 'Talentskeet Consulting • Bangalore Urban • Remote' -> '{t1}'")
+    print(f"  [PASS] 'Talentskeet Consulting â€¢ Bangalore Urban â€¢ Remote' -> '{t1}'")
 
     t2 = clean_company_name("Gleanwork | Enterprise Search & RAG")
     assert t2 == "Gleanwork", f"Got: '{t2}'"
@@ -72,7 +72,9 @@ def test_503_error_detection():
 
     print("  [PASS] 503 / Overload / Timeout detection correctly flags immediate model switch.")
     print(f"  [PASS] LITE_TIER_MODELS chain: {LITE_TIER_MODELS}")
-    assert LITE_TIER_MODELS[0] == "gemini-3.5-flash-lite", "gemini-3.5-flash-lite must be primary"
+    assert LITE_TIER_MODELS[0] == "gemini-3.1-flash-lite", f"gemini-3.1-flash-lite must be primary (got: {LITE_TIER_MODELS[0]}). gemini-3.5-flash-lite removed: confirmed 503 in prod."
+    assert "gemini-2.5-flash-lite" not in LITE_TIER_MODELS, "gemini-2.5-flash-lite is 404 retired"
+    assert "gemini-3.5-flash-lite" not in LITE_TIER_MODELS, "gemini-3.5-flash-lite is 503 overloaded"
 
 
 def test_batch_company_intel_latency():
@@ -84,7 +86,7 @@ def test_batch_company_intel_latency():
     sample_jobs = [
         JobPosting(
             job_id="test_glean_01",
-            company="Gleanwork • Bangalore Urban • Remote",
+            company="Gleanwork â€¢ Bangalore Urban â€¢ Remote",
             role="AI Search Engineer",
             location="Bangalore",
             jd_text="Build enterprise generative search, hybrid retrieval, vector search over work data.",
@@ -137,4 +139,5 @@ if __name__ == "__main__":
     print("\n" + "=" * 70)
     print("  ALL BATCH & PERFORMANCE TESTS PASSED!")
     print("=" * 70)
+
 
