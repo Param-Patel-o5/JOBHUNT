@@ -251,7 +251,6 @@ def verify_contact_company(
         for m in re.finditer(pattern, text, re.IGNORECASE):
             start_idx = m.start()
             preceding_text = text[:start_idx]
-            # Clause break boundaries so past indicator belonging to a prior clause doesn't contaminate
             clause_break = max(
                 preceding_text.rfind("|"),
                 preceding_text.rfind("•"),
@@ -282,7 +281,6 @@ def verify_contact_company(
             )
             preceding_window = text[clause_break:start_idx]
             if not PAST_TENURE_REGEX.search(preceding_window):
-                # Found at least one occurrence that is NOT preceded by past indicators
                 return False
         return True
 

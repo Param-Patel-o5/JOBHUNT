@@ -58,8 +58,17 @@ class OutreachPackage(BaseModel):
     contact_name: str
     contact_tier: str
     linkedin_url: str
-    connection_note_300_chars: str = Field(description="Strict <=190 char note for LinkedIn free-tier 'Add a note' modal (Mentor/Advice frame, zero referral ask)")
-    full_dm_under_95_words: str = Field(description="Full message once connected (<=85 words, plain-English proof, low-hassle referral ask + advice)")
+    connection_note_300_chars: str = Field(
+        default="Send Blank Connection Request (Free-tier strategy)",
+        description="Deprecated/blank: LinkedIn free tier blocks connection notes after 3/month. Set to empty or 'Send Blank Connection Request (Free-tier strategy)'",
+    )
+    full_dm_under_95_words: str = Field(
+        description="Full post-connection LinkedIn referral DM (3-5 sentences following strict 6-step spec)",
+    )
+    direct_email_draft: Optional[str] = Field(
+        default="",
+        description="Clean direct email draft using honest zero-fluff rules for emailing via Hunter.io address",
+    )
 
 
 class EnrichedJobRecord(BaseModel):

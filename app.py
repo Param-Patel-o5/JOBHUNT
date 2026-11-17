@@ -577,13 +577,17 @@ def render_triage_queue():
                 if c.get("linkedin_url"):
                     st.link_button(f"Open LinkedIn Profile ({c.get('name')})", c.get("linkedin_url"), width="stretch")
 
-                st.markdown('<div class="step-box-header">STEP 1: Connection Request Note (Mentor/Advice Frame — ≤ 190 chars)</div>', unsafe_allow_html=True)
-                note = d.get("connection_note_300_chars", f"Hi {c.get('name', '').split()[0]}, came across your work at {job['company']}. Would love to connect!")
-                st.code(note, language=None, wrap_lines=True)
+                st.markdown('<div class="step-box-header">STEP 1: Connection Strategy (Free-Tier Strategy — Blank Request)</div>', unsafe_allow_html=True)
+                note = d.get("connection_note_300_chars") or "Send Blank Connection Request (Free-tier strategy)"
+                st.caption(f"💡 Strategy: {note} — preserves 3 free monthly notes.")
 
-                st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Plain English Proof + Low-Hassle Referral Ask — ≤ 85 words)</div>', unsafe_allow_html=True)
-                dm = d.get("full_dm_under_95_words", f"Hi {c.get('name', '').split()[0]}, thanks for connecting! I'm applying for {job['role']} at {job['company']}. My work: https://parampatel-ai.vercel.app")
+                st.markdown('<div class="step-box-header">STEP 2: Post-Connection Referral DM (3–5 Sentences Honest Ask)</div>', unsafe_allow_html=True)
+                dm = d.get("full_dm_under_95_words", f"Hi {c.get('name', '').split()[0]}, I'm applying for {job['role']} at {job['company']}. You can see my work here: https://param-dev.vercel.app.")
                 st.code(dm, language=None, wrap_lines=True)
+
+                if d.get("direct_email_draft"):
+                    st.markdown('<div class="step-box-header">DIRECT EMAIL: Hunter.io Direct Referral Outreach</div>', unsafe_allow_html=True)
+                    st.code(d.get("direct_email_draft"), language=None, wrap_lines=True)
 
     elif contacts and len(contacts) > 0:
         col_c1, col_c2 = st.columns(2)
@@ -605,13 +609,17 @@ def render_triage_queue():
             if c1.get("linkedin_url"):
                 st.link_button(f"Open LinkedIn Profile ({c1.get('name')})", c1.get("linkedin_url"), width="stretch")
 
-            st.markdown('<div class="step-box-header">STEP 1: Connection Request Note (Mentor/Advice Frame — ≤ 190 chars)</div>', unsafe_allow_html=True)
-            note1 = d1.get("connection_note_300_chars", f"Hi {c1.get('name', '').split()[0]}, came across your work at {job['company']}. Would love to connect!")
-            st.code(note1, language=None, wrap_lines=True)
+            st.markdown('<div class="step-box-header">STEP 1: Connection Strategy (Free-Tier Friendly)</div>', unsafe_allow_html=True)
+            note1 = d1.get("connection_note_300_chars") or "Send Blank Connection Request (Free-tier strategy)"
+            st.caption(f"💡 Strategy: {note1}")
 
-            st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Plain English Proof + Low-Hassle Referral Ask — ≤ 85 words)</div>', unsafe_allow_html=True)
-            dm1 = d1.get("full_dm_under_95_words", f"Hi {c1.get('name', '').split()[0]}, thanks for connecting! I'm applying for {job['role']} at {job['company']}. My work: https://parampatel-ai.vercel.app")
+            st.markdown('<div class="step-box-header">STEP 2: Post-Connection Referral DM (3–5 Sentences Honest Ask)</div>', unsafe_allow_html=True)
+            dm1 = d1.get("full_dm_under_95_words", f"Hi {c1.get('name', '').split()[0]}, I'm applying for {job['role']} at {job['company']}. You can see my work here: https://param-dev.vercel.app.")
             st.code(dm1, language=None, wrap_lines=True)
+
+            if d1.get("direct_email_draft"):
+                st.markdown('<div class="step-box-header">DIRECT EMAIL: Hunter.io Referral Outreach</div>', unsafe_allow_html=True)
+                st.code(d1.get("direct_email_draft"), language=None, wrap_lines=True)
 
         # Contact 2 or Fallback
         with col_c2:
@@ -632,13 +640,17 @@ def render_triage_queue():
                 if c2.get("linkedin_url"):
                     st.link_button(f"Open LinkedIn Profile ({c2.get('name')})", c2.get("linkedin_url"), width="stretch")
 
-                st.markdown('<div class="step-box-header">STEP 1: Connection Request Note (Mentor/Advice Frame — ≤ 190 chars)</div>', unsafe_allow_html=True)
-                note2 = d2.get("connection_note_300_chars", f"Hi {c2.get('name', '').split()[0]}, came across your work at {job['company']}. Would love to connect!")
-                st.code(note2, language=None, wrap_lines=True)
+                st.markdown('<div class="step-box-header">STEP 1: Connection Strategy (Free-Tier Friendly)</div>', unsafe_allow_html=True)
+                note2 = d2.get("connection_note_300_chars") or "Send Blank Connection Request (Free-tier strategy)"
+                st.caption(f"💡 Strategy: {note2}")
 
-                st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Plain English Proof + Low-Hassle Referral Ask — ≤ 85 words)</div>', unsafe_allow_html=True)
-                dm2 = d2.get("full_dm_under_95_words", f"Hi {c2.get('name', '').split()[0]}, thanks for connecting! Applying for {job['role']} at {job['company']}. My work: https://parampatel-ai.vercel.app")
+                st.markdown('<div class="step-box-header">STEP 2: Post-Connection Referral DM (3–5 Sentences Honest Ask)</div>', unsafe_allow_html=True)
+                dm2 = d2.get("full_dm_under_95_words", f"Hi {c2.get('name', '').split()[0]}, I'm applying for {job['role']} at {job['company']}. You can see my work here: https://param-dev.vercel.app.")
                 st.code(dm2, language=None, wrap_lines=True)
+
+                if d2.get("direct_email_draft"):
+                    st.markdown('<div class="step-box-header">DIRECT EMAIL: Hunter.io Referral Outreach</div>', unsafe_allow_html=True)
+                    st.code(d2.get("direct_email_draft"), language=None, wrap_lines=True)
             elif fallback_note:
                 st.markdown('<div class="contact-title">Direct Application Cover Note</div>', unsafe_allow_html=True)
                 st.markdown('<div class="contact-meta">Alternative direct apply note for ATS cover letter</div>', unsafe_allow_html=True)
@@ -727,6 +739,7 @@ def export_rich_tracker_csv(df: pd.DataFrame) -> str:
             "Contact 1 LinkedIn": c1.get("linkedin_url", ""),
             "Contact 1 Step 1 Note": d1.get("connection_note_300_chars", ""),
             "Contact 1 Step 2 DM": d1.get("full_dm_under_95_words", ""),
+            "Contact 1 Direct Email": d1.get("direct_email_draft", ""),
             "Contact 2 Name": c2.get("name", ""),
             "Contact 2 Email": c2.get("email", ""),
             "Contact 2 Tier": c2.get("tier", ""),
@@ -734,16 +747,19 @@ def export_rich_tracker_csv(df: pd.DataFrame) -> str:
             "Contact 2 LinkedIn": c2.get("linkedin_url", ""),
             "Contact 2 Step 1 Note": d2.get("connection_note_300_chars", ""),
             "Contact 2 Step 2 DM": d2.get("full_dm_under_95_words", ""),
+            "Contact 2 Direct Email": d2.get("direct_email_draft", ""),
             "Contact 3 Name": c3.get("name", ""),
             "Contact 3 Email": c3.get("email", ""),
             "Contact 3 LinkedIn": c3.get("linkedin_url", ""),
             "Contact 3 Step 1 Note": d3.get("connection_note_300_chars", ""),
             "Contact 3 Step 2 DM": d3.get("full_dm_under_95_words", ""),
+            "Contact 3 Direct Email": d3.get("direct_email_draft", ""),
             "Contact 4 Name": c4.get("name", ""),
             "Contact 4 Email": c4.get("email", ""),
             "Contact 4 LinkedIn": c4.get("linkedin_url", ""),
             "Contact 4 Step 1 Note": d4.get("connection_note_300_chars", ""),
             "Contact 4 Step 2 DM": d4.get("full_dm_under_95_words", ""),
+            "Contact 4 Direct Email": d4.get("direct_email_draft", ""),
             "Direct Cover Note": row.get("fallback_note", ""),
             "Winning Hook": row.get("winning_hook", ""),
             "Notes": row.get("notes", ""),
@@ -922,13 +938,17 @@ def render_application_tracker():
                 if c.get("linkedin_url"):
                     st.link_button(f"Open LinkedIn Profile ({c.get('name')})", c.get("linkedin_url"), width="stretch")
 
-                st.caption("STEP 1: Connection Request Note (Sent)")
-                note = d.get("connection_note_300_chars", "")
-                st.code(note, language=None, wrap_lines=True)
+                st.caption("STEP 1: Connection Strategy (Free-Tier Blank Request)")
+                note = d.get("connection_note_300_chars") or "Send Blank Connection Request (Free-tier strategy)"
+                st.caption(f"💡 Strategy: {note}")
 
                 st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Send after connection accepted)</div>', unsafe_allow_html=True)
                 dm = d.get("full_dm_under_95_words", "")
                 st.code(dm, language=None, wrap_lines=True)
+
+                if d.get("direct_email_draft"):
+                    st.markdown('<div class="step-box-header">DIRECT EMAIL: Hunter.io Referral Email</div>', unsafe_allow_html=True)
+                    st.code(d.get("direct_email_draft"), language=None, wrap_lines=True)
     elif contacts and len(contacts) > 0:
         col_c1, col_c2 = st.columns(2)
 
@@ -950,13 +970,17 @@ def render_application_tracker():
             if c1.get("linkedin_url"):
                 st.link_button(f"Open LinkedIn Profile ({c1.get('name')})", c1.get("linkedin_url"), width="stretch")
 
-            st.caption("STEP 1: Connection Request Note (Sent)")
-            note1 = d1.get("connection_note_300_chars", "")
-            st.code(note1, language=None, wrap_lines=True)
+            st.caption("STEP 1: Connection Strategy (Free-Tier Blank Request)")
+            note1 = d1.get("connection_note_300_chars") or "Send Blank Connection Request (Free-tier strategy)"
+            st.caption(f"💡 Strategy: {note1}")
 
             st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Send after connection accepted)</div>', unsafe_allow_html=True)
             dm1 = d1.get("full_dm_under_95_words", "")
             st.code(dm1, language=None, wrap_lines=True)
+
+            if d1.get("direct_email_draft"):
+                st.markdown('<div class="step-box-header">DIRECT EMAIL: Hunter.io Referral Email</div>', unsafe_allow_html=True)
+                st.code(d1.get("direct_email_draft"), language=None, wrap_lines=True)
 
         # Contact 2
         with col_c2:
@@ -977,13 +1001,17 @@ def render_application_tracker():
                 if c2.get("linkedin_url"):
                     st.link_button(f"Open LinkedIn Profile ({c2.get('name')})", c2.get("linkedin_url"), width="stretch")
 
-                st.caption("STEP 1: Connection Request Note (Sent)")
-                note2 = d2.get("connection_note_300_chars", "")
-                st.code(note2, language=None, wrap_lines=True)
+                st.caption("STEP 1: Connection Strategy (Free-Tier Blank Request)")
+                note2 = d2.get("connection_note_300_chars") or "Send Blank Connection Request (Free-tier strategy)"
+                st.caption(f"💡 Strategy: {note2}")
 
                 st.markdown('<div class="step-box-header">STEP 2: Post-Connection DM (Send after connection accepted)</div>', unsafe_allow_html=True)
                 dm2 = d2.get("full_dm_under_95_words", "")
                 st.code(dm2, language=None, wrap_lines=True)
+
+                if d2.get("direct_email_draft"):
+                    st.markdown('<div class="step-box-header">DIRECT EMAIL: Hunter.io Referral Email</div>', unsafe_allow_html=True)
+                    st.code(d2.get("direct_email_draft"), language=None, wrap_lines=True)
             elif fallback_note:
                 st.markdown('<div class="contact-title">Direct Application Cover Note</div>', unsafe_allow_html=True)
                 st.code(fallback_note, language=None, wrap_lines=True)

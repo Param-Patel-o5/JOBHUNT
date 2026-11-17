@@ -75,6 +75,7 @@ def backfill_outreach():
                 jd_text=row["jd_text"] or "",
                 job_url=row["job_url"],
                 source=row["source"] or "Direct",
+                required_yoe=int(row["required_yoe"] or 0) if "required_yoe" in row.keys() else 0,
             )
 
             company_intel = CompanyIntel(

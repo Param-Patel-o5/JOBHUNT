@@ -73,6 +73,7 @@ def init_db(db_path: Path = DB_PATH) -> None:
             ("hr_email", "TEXT DEFAULT ''"),
             ("referrer_name", "TEXT DEFAULT ''"),
             ("jd_text", "TEXT DEFAULT ''"),
+            ("required_yoe", "INTEGER DEFAULT 0"),
         ]:
             try:
                 conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {col_type}")
