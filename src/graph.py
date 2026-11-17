@@ -20,7 +20,7 @@ from src.models import (
     JobHuntGraphState,
 )
 from src.db import init_db, save_enriched_jobs
-from src.nodes.scrapers import run_all_scrapers
+from src.nodes.scrape import run_all_scrapers
 from src.nodes.filter import filter_jobs
 from src.nodes.company_intel import evaluate_companies_for_jobs
 from src.nodes.evaluate import score_and_tailor_jobs
