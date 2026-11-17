@@ -21,9 +21,9 @@ from src.models import (
 )
 from src.db import init_db, save_enriched_jobs
 from src.nodes.scrapers import run_all_scrapers
-from src.nodes.gatekeeper import filter_jobs
+from src.nodes.filter import filter_jobs
 from src.nodes.company_intel import evaluate_companies_for_jobs
-from src.nodes.matcher import score_and_tailor_jobs
+from src.nodes.evaluate import score_and_tailor_jobs
 from src.nodes.people_finder import find_contacts_for_company, find_hr_email_for_company
 from src.nodes.drafter import generate_outreach_for_job
 

@@ -112,7 +112,7 @@ def save_enriched_jobs(records: List[Any], db_path: Path = DB_PATH) -> int:
                 (r.job.job_id,),
             )
             existing = cur.fetchone()
-            status = existing[0] if existing and existing[0] else "NEW"
+            status = existing[0] if existing and existing[0] else (getattr(r, "status", None) or "NEW")
             notes = existing[1] if existing and existing[1] is not None else ""
             outreach_sent_at = existing[2] if existing else None
 
@@ -164,6 +164,61 @@ def save_enriched_jobs(records: List[Any], db_path: Path = DB_PATH) -> int:
             saved += 1
         conn.commit()
     return saved
+
+
+def save_rejected_evaluated_job(
+    job: Any,
+    intel: Any,
+    match_result: Any,
+    rejection_reason: str = "Match score below 75% floor",
+    db_path: Path = DB_PATH,
+) -> None:
+    """Saves a low-scoring evaluated job as REJECTED in SQLite to keep active queue clean and prevent re-evaluation."""
+    init_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.execute("SELECT status FROM jobs WHERE job_id = ?", (job.job_id,))
+        existing = cur.fetchone()
+        if existing and existing[0] != "NEW":
+            return  # Do not overwrite if user has already modified status
+
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO jobs (
+                job_id, company, role, location, job_url, source,
+                match_score, est_ctc_lpa, company_stage, company_summary,
+                winning_hook, selected_project, missing_keywords_json, resume_tweaks_json,
+                contacts_json, outreach_drafts_json, fallback_note, notes,
+                status, outreach_sent_at, jd_summary_json, hr_email, referrer_name, jd_text
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job.job_id,
+                job.company,
+                job.role,
+                job.location,
+                job.job_url,
+                job.source,
+                match_result.match_score,
+                getattr(intel, "est_entry_ai_ctc_lpa", 0.0),
+                getattr(intel, "funding_or_stage", ""),
+                getattr(intel, "summary_2_lines", ""),
+                getattr(match_result, "winning_hook_sentence", ""),
+                getattr(match_result, "selected_project_id", ""),
+                json.dumps(getattr(match_result, "missing_keywords", [])),
+                json.dumps(getattr(match_result, "resume_bullet_tweaks", [])),
+                "[]",
+                "[]",
+                None,
+                f"[AUTO-REJECT] {rejection_reason} (Score: {match_result.match_score}%)",
+                "REJECTED",
+                None,
+                json.dumps(getattr(match_result, "jd_core_requirements", [])),
+                getattr(intel, "hr_email", ""),
+                "",
+                getattr(job, "jd_text", ""),
+            ),
+        )
+        conn.commit()
 
 
 def get_cached_company_intel(company: str, db_path: Path = DB_PATH) -> Optional[CompanyIntel]:

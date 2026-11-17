@@ -14,6 +14,7 @@ class JobPosting(BaseModel):
     source: str = Field(description="linkedin, wellfound, greenhouse, lever, ashby, etc.")
     posted_date: Optional[str] = None
     extracted_max_yoe: Optional[int] = None
+    required_yoe: Optional[int] = Field(default=0, description="Minimum required years of experience extracted from JD")
 
 
 class CompanyIntel(BaseModel):
@@ -61,6 +62,7 @@ class EnrichedJobRecord(BaseModel):
     fallback_direct_apply_note: Optional[str] = None
     hr_email: Optional[str] = Field(default="", description="HR or recruiting email for the company")
     referrer_name: Optional[str] = Field(default="", description="Comma-separated names of discovered contacts")
+    status: Optional[str] = Field(default=None, description="Pipeline stage, defaults to NEW or REJECTED")
 
 
 # LangGraph Shared State
