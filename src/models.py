@@ -15,6 +15,8 @@ class JobPosting(BaseModel):
     posted_date: Optional[str] = None
     extracted_max_yoe: Optional[int] = None
     required_yoe: Optional[int] = Field(default=0, description="Minimum required years of experience extracted from JD")
+    connect_sent_at: Optional[str] = Field(default=None, description="Timestamp when connection invite was sent")
+    updated_at: Optional[str] = Field(default=None, description="Timestamp when job record was last updated")
 
 
 class CompanyIntel(BaseModel):

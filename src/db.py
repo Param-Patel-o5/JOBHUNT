@@ -12,14 +12,18 @@ DB_PATH = Path("data/job_hunt.db")
 VALID_STATUSES = [
     "NEW",
     "CONNECT_SENT",
-    "ASKED_REFERRAL",
-    "APPLIED_VIA_REFERRAL",
+    "CONNECTED_READY_TO_ASK",
+    "REFERRAL_ASKED",
+    "REFERRED_APPLIED",
+    "STALE_NO_RESPONSE",
+    "REJECTED",
+    "SKIPPED",
+    "ASKED_REFERRAL",       # legacy alias
+    "APPLIED_VIA_REFERRAL", # legacy alias
     "APPLIED_DIRECT",
     "OA_RECEIVED",
     "INTERVIEW",
     "OFFER",
-    "REJECTED",
-    "SKIPPED",
 ]
 
 
@@ -50,6 +54,8 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 notes TEXT DEFAULT '',
                 status TEXT DEFAULT 'NEW',
                 outreach_sent_at TIMESTAMP,
+                connect_sent_at TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
@@ -74,15 +80,45 @@ def init_db(db_path: Path = DB_PATH) -> None:
             ("referrer_name", "TEXT DEFAULT ''"),
             ("jd_text", "TEXT DEFAULT ''"),
             ("required_yoe", "INTEGER DEFAULT 0"),
+            ("connect_sent_at", "TIMESTAMP"),
+            ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
         ]:
             try:
                 conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {col_type}")
             except sqlite3.OperationalError:
                 pass
 
-        # Migrate legacy status 'REFERRAL_SENT' to 'ASKED_REFERRAL'
-        conn.execute("UPDATE jobs SET status = 'ASKED_REFERRAL' WHERE status = 'REFERRAL_SENT'")
+        # Migrate legacy status names
+        conn.execute("UPDATE jobs SET status = 'REFERRAL_ASKED' WHERE status = 'REFERRAL_SENT'")
+        # Backfill connect_sent_at for CONNECT_SENT jobs if null
+        conn.execute("UPDATE jobs SET connect_sent_at = outreach_sent_at WHERE status = 'CONNECT_SENT' AND connect_sent_at IS NULL AND outreach_sent_at IS NOT NULL")
         conn.commit()
+
+
+def auto_transition_stale_connections(db_path: Path = DB_PATH, stale_days: int = 5) -> int:
+    """
+    Checks jobs with status 'CONNECT_SENT' where connect_sent_at (or outreach_sent_at)
+    is older than stale_days (default 5 days). Transitions them to 'STALE_NO_RESPONSE'.
+    Returns the count of transitioned jobs.
+    """
+    init_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.execute(
+            f"""
+            UPDATE jobs 
+            SET status = 'STALE_NO_RESPONSE',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE status = 'CONNECT_SENT' 
+              AND (
+                  (connect_sent_at IS NOT NULL AND datetime(connect_sent_at) <= datetime('now', '-{stale_days} days'))
+                  OR
+                  (connect_sent_at IS NULL AND outreach_sent_at IS NOT NULL AND datetime(outreach_sent_at) <= datetime('now', '-{stale_days} days'))
+              )
+            """
+        )
+        transitioned = cur.rowcount
+        conn.commit()
+    return transitioned
 
 
 def is_job_seen(job_id: str, company: str, role: str, db_path: Path = DB_PATH) -> bool:
@@ -109,13 +145,15 @@ def save_enriched_jobs(records: List[Any], db_path: Path = DB_PATH) -> int:
         for r in records:
             # Check for existing user status, notes, hr_email, and referrer_name
             cur = conn.execute(
-                "SELECT status, notes, outreach_sent_at, hr_email, referrer_name FROM jobs WHERE job_id = ?",
+                "SELECT status, notes, outreach_sent_at, hr_email, referrer_name, connect_sent_at FROM jobs WHERE job_id = ?",
                 (r.job.job_id,),
             )
             existing = cur.fetchone()
+            # PROTECTED STATES: Never overwrite user-progressed status
             status = existing[0] if existing and existing[0] else (getattr(r, "status", None) or "NEW")
             notes = existing[1] if existing and existing[1] is not None else ""
             outreach_sent_at = existing[2] if existing else None
+            connect_sent_at = existing[5] if existing else None
 
             default_hr = getattr(r, "hr_email", "") or getattr(r.company_intel, "hr_email", "") or ""
             hr_email = existing[3] if existing and existing[3] else default_hr
@@ -132,8 +170,9 @@ def save_enriched_jobs(records: List[Any], db_path: Path = DB_PATH) -> int:
                     match_score, est_ctc_lpa, company_stage, company_summary,
                     winning_hook, selected_project, missing_keywords_json, resume_tweaks_json,
                     contacts_json, outreach_drafts_json, fallback_note, notes,
-                    status, outreach_sent_at, jd_summary_json, hr_email, referrer_name, jd_text
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    status, outreach_sent_at, jd_summary_json, hr_email, referrer_name, jd_text,
+                    connect_sent_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 """,
                 (
                     r.job.job_id,
@@ -160,6 +199,7 @@ def save_enriched_jobs(records: List[Any], db_path: Path = DB_PATH) -> int:
                     hr_email,
                     referrer_name,
                     getattr(r.job, "jd_text", ""),
+                    connect_sent_at,
                 ),
             )
             saved += 1
@@ -262,8 +302,13 @@ def get_dashboard_stats(db_path: Path = DB_PATH) -> Dict[str, int]:
     stats = {
         "total_discovered": 0,
         "total_new": 0,
+        "today_asks": 0,
+        "connect_sent": 0,
+        "ready_to_ask": 0,
         "pipeline_active": 0,
         "referrals_asked": 0,
+        "referred_applied": 0,
+        "stale": 0,
         "interviews": 0,
     }
     with sqlite3.connect(db_path) as conn:
@@ -276,19 +321,36 @@ def get_dashboard_stats(db_path: Path = DB_PATH) -> Dict[str, int]:
         cur = conn.execute("SELECT COUNT(*) FROM jobs WHERE status = 'NEW'")
         stats["total_new"] = cur.fetchone()[0]
 
-        # Pipeline Active (in motion: connect sent, asked referral, applied via referral, direct apply, OA, interview, offer)
+        # Today's Asks: Ready to ask or connect sent
+        cur = conn.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('CONNECTED_READY_TO_ASK', 'CONNECT_SENT')")
+        stats["today_asks"] = cur.fetchone()[0]
+
+        cur = conn.execute("SELECT COUNT(*) FROM jobs WHERE status = 'CONNECTED_READY_TO_ASK'")
+        stats["ready_to_ask"] = cur.fetchone()[0]
+
+        cur = conn.execute("SELECT COUNT(*) FROM jobs WHERE status = 'CONNECT_SENT'")
+        stats["connect_sent"] = cur.fetchone()[0]
+
+        # Active Referrals (Asked or Referred)
+        cur = conn.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('REFERRAL_ASKED', 'REFERRED_APPLIED', 'ASKED_REFERRAL', 'APPLIED_VIA_REFERRAL')")
+        stats["referrals_asked"] = cur.fetchone()[0]
+        stats["referrals_sent"] = stats["referrals_asked"]
+
+        cur = conn.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('REFERRED_APPLIED', 'APPLIED_VIA_REFERRAL')")
+        stats["referred_applied"] = cur.fetchone()[0]
+
+        # Stale Connections
+        cur = conn.execute("SELECT COUNT(*) FROM jobs WHERE status = 'STALE_NO_RESPONSE'")
+        stats["stale"] = cur.fetchone()[0]
+
+        # Pipeline Active (in motion)
         cur = conn.execute(
             """
             SELECT COUNT(*) FROM jobs 
-            WHERE status IN ('CONNECT_SENT', 'ASKED_REFERRAL', 'APPLIED_VIA_REFERRAL', 'APPLIED_DIRECT', 'OA_RECEIVED', 'INTERVIEW', 'OFFER')
+            WHERE status IN ('CONNECT_SENT', 'CONNECTED_READY_TO_ASK', 'REFERRAL_ASKED', 'REFERRED_APPLIED', 'ASKED_REFERRAL', 'APPLIED_VIA_REFERRAL', 'APPLIED_DIRECT', 'OA_RECEIVED', 'INTERVIEW', 'OFFER')
             """
         )
         stats["pipeline_active"] = cur.fetchone()[0]
-
-        # Referrals Asked
-        cur = conn.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('ASKED_REFERRAL', 'APPLIED_VIA_REFERRAL')")
-        stats["referrals_asked"] = cur.fetchone()[0]
-        stats["referrals_sent"] = stats["referrals_asked"]
 
         # Active Interviews / Offers
         cur = conn.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('INTERVIEW', 'OFFER')")
@@ -315,7 +377,7 @@ def get_overdue_followups(db_path: Path = DB_PATH, days: int = 2) -> List[Dict[s
         cur = conn.execute(
             f"""
             SELECT * FROM jobs 
-            WHERE status = 'ASKED_REFERRAL' 
+            WHERE status IN ('REFERRAL_ASKED', 'ASKED_REFERRAL') 
               AND outreach_sent_at IS NOT NULL
               AND datetime(outreach_sent_at) <= datetime('now', '-{days} days')
             ORDER BY outreach_sent_at ASC
@@ -359,13 +421,21 @@ def load_jobs_dataframe(status_filter: Optional[str] = None, db_path: Path = DB_
                 jd_summary_json,
                 jd_text,
                 outreach_sent_at,
+                connect_sent_at,
+                updated_at,
                 created_at
             FROM jobs
         """
         params = []
         if status_filter and status_filter.upper() != "ALL":
-            query += " WHERE UPPER(status) = ?"
-            params.append(status_filter.upper())
+            sf = status_filter.upper()
+            if sf in ("REFERRAL_ASKED", "ASKED_REFERRAL"):
+                query += " WHERE UPPER(status) IN ('REFERRAL_ASKED', 'ASKED_REFERRAL')"
+            elif sf in ("REFERRED_APPLIED", "APPLIED_VIA_REFERRAL"):
+                query += " WHERE UPPER(status) IN ('REFERRED_APPLIED', 'APPLIED_VIA_REFERRAL')"
+            else:
+                query += " WHERE UPPER(status) = ?"
+                params.append(sf)
 
         query += " ORDER BY match_score DESC, created_at DESC"
         df = pd.read_sql_query(query, conn, params=params)
@@ -382,7 +452,7 @@ def update_job_status_and_notes(updates_df: pd.DataFrame, db_path: Path = DB_PAT
     """
     Persists user edits from st.data_editor back to SQLite.
     Persists status, notes, hr_email, and referrer_name.
-    If status transitions to 'ASKED_REFERRAL' or 'CONNECT_SENT', updates outreach_sent_at if null.
+    Updates timestamps accordingly.
     """
     init_db(db_path)
     if updates_df.empty or "job_id" not in updates_df.columns:
@@ -400,12 +470,7 @@ def update_job_status_and_notes(updates_df: pd.DataFrame, db_path: Path = DB_PAT
             if new_status not in VALID_STATUSES:
                 new_status = "NEW"
 
-            # Check previous status to detect transitions to ASKED_REFERRAL
-            cur = conn.execute("SELECT status FROM jobs WHERE job_id = ?", (job_id,))
-            prev_row = cur.fetchone()
-            prev_status = prev_row[0] if prev_row else "NEW"
-
-            if new_status == "ASKED_REFERRAL" and prev_status != "ASKED_REFERRAL":
+            if new_status in ("REFERRAL_ASKED", "ASKED_REFERRAL"):
                 conn.execute(
                     """
                     UPDATE jobs 
@@ -413,12 +478,13 @@ def update_job_status_and_notes(updates_df: pd.DataFrame, db_path: Path = DB_PAT
                         notes = ?, 
                         hr_email = ?,
                         referrer_name = ?,
-                        outreach_sent_at = CURRENT_TIMESTAMP
+                        outreach_sent_at = CURRENT_TIMESTAMP,
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE job_id = ?
                     """,
                     (new_status, notes, hr_email, referrer_name, job_id),
                 )
-            elif new_status in ("ASKED_REFERRAL", "CONNECT_SENT"):
+            elif new_status == "CONNECT_SENT":
                 conn.execute(
                     """
                     UPDATE jobs 
@@ -426,7 +492,9 @@ def update_job_status_and_notes(updates_df: pd.DataFrame, db_path: Path = DB_PAT
                         notes = ?, 
                         hr_email = ?,
                         referrer_name = ?,
-                        outreach_sent_at = COALESCE(outreach_sent_at, CURRENT_TIMESTAMP)
+                        connect_sent_at = COALESCE(connect_sent_at, CURRENT_TIMESTAMP),
+                        outreach_sent_at = COALESCE(outreach_sent_at, CURRENT_TIMESTAMP),
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE job_id = ?
                     """,
                     (new_status, notes, hr_email, referrer_name, job_id),
@@ -439,7 +507,9 @@ def update_job_status_and_notes(updates_df: pd.DataFrame, db_path: Path = DB_PAT
                         notes = ?, 
                         hr_email = ?,
                         referrer_name = ?,
-                        outreach_sent_at = NULL
+                        outreach_sent_at = NULL,
+                        connect_sent_at = NULL,
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE job_id = ?
                     """,
                     (new_status, notes, hr_email, referrer_name, job_id),
@@ -451,7 +521,8 @@ def update_job_status_and_notes(updates_df: pd.DataFrame, db_path: Path = DB_PAT
                     SET status = ?, 
                         notes = ?, 
                         hr_email = ?,
-                        referrer_name = ?
+                        referrer_name = ?,
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE job_id = ?
                     """,
                     (new_status, notes, hr_email, referrer_name, job_id),
@@ -474,7 +545,7 @@ def update_single_job(
         update_single_job_status(job_id=job_id, new_status=new_status, notes=notes, db_path=db_path)
     elif notes is not None:
         with sqlite3.connect(db_path) as conn:
-            conn.execute("UPDATE jobs SET notes = ? WHERE job_id = ?", (notes, job_id))
+            conn.execute("UPDATE jobs SET notes = ?, updated_at = CURRENT_TIMESTAMP WHERE job_id = ?", (notes, job_id))
             conn.commit()
 
 
@@ -485,12 +556,34 @@ def update_single_job_status(
     referrer_name: Optional[str] = None,
     db_path: Path = DB_PATH,
 ) -> None:
-    """Updates status and optionally notes & referrer_name for a single job.
-    If new_status is 'ASKED_REFERRAL' or 'CONNECT_SENT', sets outreach_sent_at to CURRENT_TIMESTAMP.
-    If new_status is 'NEW', clears outreach_sent_at to NULL.
-    """
+    """Updates status and optionally notes & referrer_name for a single job."""
     init_db(db_path)
     st = new_status.strip().upper()
+    with sqlite3.connect(db_path) as conn:
+        updates = ["status = ?", "updated_at = CURRENT_TIMESTAMP"]
+        params: List[Any] = [st]
+
+        if notes is not None:
+            updates.append("notes = ?")
+            params.append(notes)
+
+        if referrer_name is not None:
+            updates.append("referrer_name = ?")
+            params.append(referrer_name)
+
+        if st == "CONNECT_SENT":
+            updates.append("connect_sent_at = CURRENT_TIMESTAMP")
+            updates.append("outreach_sent_at = COALESCE(outreach_sent_at, CURRENT_TIMESTAMP)")
+        elif st in ("REFERRAL_ASKED", "ASKED_REFERRAL"):
+            updates.append("outreach_sent_at = CURRENT_TIMESTAMP")
+        elif st == "NEW":
+            updates.append("outreach_sent_at = NULL")
+            updates.append("connect_sent_at = NULL")
+
+        params.append(job_id)
+        sql = f"UPDATE jobs SET {', '.join(updates)} WHERE job_id = ?"
+        conn.execute(sql, params)
+        conn.commit()
     with sqlite3.connect(db_path) as conn:
         updates = ["status = ?"]
         params: List[Any] = [st]
